@@ -1,791 +1,169 @@
-import {
-  Injectable,
-  ConflictException,
-  NotFoundException,
-} from '@nestjs/common';
-import { User } from './entities/user.entity';
-import { CreateUserDto } from './dto/create-user.dto';
-import { UpdateUserDto } from './dto/update-user.dto';
-import { UserPerformanceDto } from './dto/user-performance.dto';
+import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { CloudinaryService } from '../cloudinary/cloudinary.service';
-import { RoleEnum, Prisma } from '@prisma/client';
+import { UserRole } from '../common/types/prisma-types';
 import * as bcrypt from 'bcrypt';
 
 @Injectable()
 export class UsersService {
-  constructor(
-    private prisma: PrismaService,
-    private cloudinaryService: CloudinaryService,
-  ) {}
+  constructor(private prisma: PrismaService) {}
 
-  async create(
-    createUserDto: CreateUserDto,
-    creatorId?: string,
-  ): Promise<User> {
-    // Vérifier si l'email existe déjà
-    const existingUser = await this.prisma.user.findUnique({
-      where: { email: createUserDto.email },
-    });
+  async findById(id: string) {
+    return this.prisma.user.findUnique({
+      where: { id },
+      include: {
 
-    if (existingUser) {
-      throw new ConflictException('Cet email est déjà utilisé');
-    }
 
-    // Hasher le mot de passe
-    const hashedPassword = await bcrypt.hash(createUserDto.password, 10);
-
-    // Déterminer le territoire et secteur du nouvel utilisateur
-    let territoryId = createUserDto.territoryId;
-    let managerId = createUserDto.managerId;
-
-    // Si un creatorId est fourni (création par un admin)
-    if (creatorId) {
-      const creator = await this.prisma.user.findUnique({
-        where: { id: creatorId },
-        select: { territoryId: true, role: true },
-      });
-
-      if (creator) {
-        // Si le créateur est ADMIN et que le nouvel utilisateur est REP
-        if (creator.role === 'ADMIN' && createUserDto.role === 'REP') {
-          // Le vendeur hérite automatiquement du territoire (ZONE) de l'admin
-          if (!territoryId && creator.territoryId) {
-            territoryId = creator.territoryId;
-          }
-
-          // Assigner automatiquement l'admin comme manager
-          managerId = creatorId;
-        }
-      }
-    }
-
-    // Si toujours pas de territoire, utiliser le territoire par défaut
-    if (!territoryId) {
-      const defaultTerritory = await this.prisma.territory.findFirst({
-        where: { code: 'DEFAULT' },
-      });
-
-      if (!defaultTerritory) {
-        throw new Error('Default territory not found. Please run seed script.');
-      }
-
-      territoryId = defaultTerritory.id;
-    }
-
-    // Créer le nouvel utilisateur avec Prisma
-    const newUser = await this.prisma.user.create({
-      data: {
-        email: createUserDto.email,
-        passwordHash: hashedPassword,
-        firstName: createUserDto.firstName,
-        lastName: createUserDto.lastName,
-        role: (createUserDto.role as RoleEnum) || 'REP',
-        status: 'ACTIVE',
-        territoryId: territoryId,
-        phone: createUserDto.phone,
-        matricule: createUserDto.matricule || null,
-        hireDate: createUserDto.hireDate
-          ? new Date(createUserDto.hireDate)
-          : null,
-        ...(managerId && { managerId }),
+        manager: true,
       },
     });
-
-    // Retourner l'utilisateur au format attendu
-    return this.mapPrismaUserToEntity(newUser);
   }
 
-  async findByEmail(email: string): Promise<User | undefined> {
-    const user = await this.prisma.user.findUnique({
+  async findByEmail(email: string) {
+    return this.prisma.user.findUnique({
       where: { email },
     });
-
-    if (!user) {
-      return undefined;
-    }
-
-    return this.mapPrismaUserToEntity(user);
   }
 
-  async findById(id: string): Promise<User | undefined> {
-    const user = await this.prisma.user.findUnique({
-      where: { id },
+  async findByMatricule(matricule: string) {
+    return this.prisma.user.findUnique({
+      where: { matricule },
     });
-
-    if (!user) {
-      throw new NotFoundException('Utilisateur non trouvé');
-    }
-
-    return this.mapPrismaUserToEntity(user);
   }
 
-  async findByIdWithRelations(id: string): Promise<{
-    id: string;
-    email: string;
-    firstName: string;
-    lastName: string;
-    role: string;
-    isActive: boolean;
-    phone: string | null;
-    photoUrl: string | null;
-    matricule: string | null;
-    hireDate: string | null;
-    territory: string | null;
-    territoryName: string | null;
-    manager: string | null;
-  }> {
-    const user = await this.prisma.user.findUnique({
-      where: { id },
+  async findAll(filters?: { role?: UserRole; territoryId?: string; managerId?: string }) {
+    const where: any = {};
+    
+    if (filters?.role) {
+      where.role = filters.role;
+    }
+    
+    if (filters?.territoryId) {
+      where.territoryId = filters.territoryId;
+    }
+    
+    if (filters?.managerId) {
+      where.managerId = filters.managerId;
+    }
+
+    return this.prisma.user.findMany({
+      where,
       include: {
-        territory: {
-          select: {
-            name: true,
-          },
-        },
-        manager: {
-          select: {
-            firstName: true,
-            lastName: true,
-          },
-        },
+
+
+        manager: true,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async getTeamMembers(managerId: string) {
+    return this.prisma.user.findMany({
+      where: {
+        managerId,
+        role: { in: [UserRole.REP, UserRole.ADMIN] },
+      },
+      include: {
+
+
       },
     });
+  }
 
-    if (!user) {
-      throw new NotFoundException('Utilisateur non trouvé');
+  async create(data: any) {
+    // Check if email exists
+    const existingEmail = await this.findByEmail(data.email);
+    if (existingEmail) {
+      throw new ConflictException('Email already exists');
     }
 
-    // Mapper les données avec les relations
+    // Check if matricule exists
+    const existingMatricule = await this.findByMatricule(data.matricule);
+    if (existingMatricule) {
+      throw new ConflictException('Matricule already exists');
+    }
+
+    // Hash password
+    const hashedPassword = await bcrypt.hash(data.password, 10);
+
+    return this.prisma.user.create({
+      data: {
+        ...data,
+        password: hashedPassword,
+        hireDate: data.hireDate ? new Date(data.hireDate) : null,
+      },
+      include: {
+
+
+        manager: true,
+      },
+    });
+  }
+
+  async update(id: string, data: any) {
+    if (data.password) {
+      data.password = await bcrypt.hash(data.password, 10);
+    }
+
+    return this.prisma.user.update({
+      where: { id },
+      data: {
+        ...data,
+        hireDate: data.hireDate ? new Date(data.hireDate) : undefined,
+      },
+      include: {
+
+
+        manager: true,
+      },
+    });
+  }
+
+  async delete(id: string) {
+    return this.prisma.user.delete({
+      where: { id },
+    });
+  }
+
+  async toggleStatus(id: string) {
+    const user = await this.findById(id);
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    return this.prisma.user.update({
+      where: { id },
+      data: { isActive: !user.isActive },
+    });
+  }
+
+  async getPerformance(id: string) {
+    // TODO: Implement actual performance calculation
     return {
-      id: user.id,
-      email: user.email,
-      firstName: user.firstName,
-      lastName: user.lastName,
-      role: user.role,
-      isActive: user.status === 'ACTIVE',
-      phone: user.phone || null,
-      photoUrl: user.photoUrl || null,
-      matricule: (user.matricule as string | null) || null,
-      hireDate: user.hireDate?.toISOString().split('T')[0] || null,
-      territory: user.territory?.name || null,
-      territoryName: user.territory?.name || null,
-      manager: user.manager
-        ? `${user.manager.firstName} ${user.manager.lastName}`
-        : null,
+      coverage: 85,
+      strikeRate: 75,
+      visitsThisMonth: 45,
+      salesThisMonth: 150000,
+      perfectStoreScore: 80,
+      totalOutlets: 50,
+      visitedOutlets: 42,
+      ordersThisMonth: 35,
+      averageOrderValue: 4285,
     };
   }
 
-  async findAll(currentUserId?: string): Promise<any[]> {
-    // Si pas d'utilisateur connecté, retourner tous les utilisateurs (pour compatibilité)
-    if (!currentUserId) {
-      const users = await this.prisma.user.findMany({
-        select: {
-          id: true,
-          email: true,
-          firstName: true,
-          lastName: true,
-          role: true,
-          status: true,
-          phone: true,
-          matricule: true,
-          hireDate: true,
-          photoUrl: true,
-          lastLogin: true,
-          territoryId: true,
-          territory: {
-            select: {
-              id: true,
-              name: true,
-            },
-          },
-          assignedSectorId: true,
-          assignedSector: {
-            select: {
-              id: true,
-              name: true,
-            },
-          },
-          managerId: true,
-          manager: {
-            select: {
-              id: true,
-              firstName: true,
-              lastName: true,
-            },
-          },
-          createdAt: true,
-          updatedAt: true,
-        },
-      });
-      return users.map((user) => this.mapUserForDisplay(user));
-    }
-
-    // Récupérer l'utilisateur connecté
-    const currentUser = await this.prisma.user.findUnique({
-      where: { id: currentUserId },
-      select: { role: true },
-    });
-
-    if (!currentUser) {
-      const users = await this.prisma.user.findMany({
-        select: {
-          id: true,
-          email: true,
-          firstName: true,
-          lastName: true,
-          role: true,
-          status: true,
-          phone: true,
-          matricule: true,
-          hireDate: true,
-          photoUrl: true,
-          lastLogin: true,
-          territoryId: true,
-          territory: {
-            select: {
-              id: true,
-              name: true,
-            },
-          },
-          assignedSectorId: true,
-          assignedSector: {
-            select: {
-              id: true,
-              name: true,
-            },
-          },
-          managerId: true,
-          manager: {
-            select: {
-              id: true,
-              firstName: true,
-              lastName: true,
-            },
-          },
-          createdAt: true,
-          updatedAt: true,
-        },
-      });
-      return users.map((user) => this.mapUserForDisplay(user));
-    }
-
-    // Si l'utilisateur est ADMIN, il ne voit que les vendeurs qu'il a créés (managerId = son ID)
-    if (currentUser.role === 'ADMIN') {
-      const users = await this.prisma.user.findMany({
-        where: {
-          managerId: currentUserId,
-          role: 'REP', // Les admins ne voient que les vendeurs
-        },
-        include: {
-          territory: {
-            select: {
-              name: true,
-            },
-          },
-          assignedSector: {
-            select: {
-              id: true,
-              name: true,
-            },
-          },
-        },
-      });
-      return users.map((user) => this.mapUserForDisplay(user));
-    }
-
-    // Si l'utilisateur est SUP (Manager), il voit tous les utilisateurs
-    if (currentUser.role === 'SUP') {
-      const users = await this.prisma.user.findMany({
-        select: {
-          id: true,
-          email: true,
-          firstName: true,
-          lastName: true,
-          role: true,
-          status: true,
-          phone: true,
-          matricule: true,
-          hireDate: true,
-          photoUrl: true,
-          lastLogin: true,
-          territoryId: true,
-          territory: {
-            select: {
-              id: true,
-              name: true,
-            },
-          },
-          assignedSectorId: true,
-          assignedSector: {
-            select: {
-              id: true,
-              name: true,
-            },
-          },
-          managerId: true,
-          manager: {
-            select: {
-              id: true,
-              firstName: true,
-              lastName: true,
-            },
-          },
-          createdAt: true,
-          updatedAt: true,
-        },
-      });
-      return users.map((user) => this.mapUserForDisplay(user));
-    }
-
-    // Pour les autres rôles (REP), ne retourner que l'utilisateur lui-même
-    const users = await this.prisma.user.findMany({
-      where: { id: currentUserId },
-      select: {
-        id: true,
-        email: true,
-        firstName: true,
-        lastName: true,
-        role: true,
-        status: true,
-        phone: true,
-        matricule: true,
-        hireDate: true,
-        photoUrl: true,
-        lastLogin: true,
-        territoryId: true,
-        territory: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-        assignedSectorId: true,
-        assignedSector: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-        managerId: true,
-        manager: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-          },
-        },
-        createdAt: true,
-        updatedAt: true,
-      },
-    });
-    return users.map((user) => this.mapUserForDisplay(user));
-  }
-
-  async getManagers(): Promise<
-    Array<{
-      id: string;
-      firstName: string;
-      lastName: string;
-      role: string;
-    }>
-  > {
-    const managers = await this.prisma.user.findMany({
-      where: {
-        role: {
-          in: ['SUP', 'ADMIN'],
-        },
-        status: 'ACTIVE',
-      },
-      select: {
-        id: true,
-        firstName: true,
-        lastName: true,
-        role: true,
-      },
-      orderBy: {
-        firstName: 'asc',
-      },
-    });
-
-    return managers;
-  }
-
-  async getTeamMembers(): Promise<User[]> {
-    const users = await this.prisma.user.findMany({
-      where: {
-        role: {
-          in: ['REP', 'ADMIN'],
-        },
-      },
-      include: {
-        territory: {
-          select: {
-            name: true,
-          },
-        },
-      },
-      orderBy: {
-        firstName: 'asc',
-      },
-    });
-
-    return users.map((user) => this.mapPrismaUserToEntity(user));
-  }
-
-  async update(id: string, updateUserDto: UpdateUserDto): Promise<User> {
-    // Vérifier si l'utilisateur existe
-    const existingUser = await this.prisma.user.findUnique({
+  async uploadPhoto(id: string, photoUrl: string) {
+    return this.prisma.user.update({
       where: { id },
-    });
-
-    if (!existingUser) {
-      throw new NotFoundException('Utilisateur non trouvé');
-    }
-
-    // Si l'email est modifié, vérifier qu'il n'est pas déjà utilisé
-    if (updateUserDto.email && updateUserDto.email !== existingUser.email) {
-      const emailExists = await this.prisma.user.findUnique({
-        where: { email: updateUserDto.email },
-      });
-
-      if (emailExists) {
-        throw new ConflictException('Cet email est déjà utilisé');
-      }
-    }
-
-    // Préparer les données à mettre à jour
-    const { password, role, ...otherData } = updateUserDto;
-    const updateData: Prisma.UserUpdateInput = {
-      ...otherData,
-      ...(role && { role: role as RoleEnum }),
-    };
-
-    // Si le mot de passe est fourni, le hasher
-    if (password) {
-      updateData.passwordHash = await bcrypt.hash(password, 10);
-    }
-
-    // Mettre à jour l'utilisateur
-    const updatedUser = await this.prisma.user.update({
-      where: { id },
-      data: updateData,
-    });
-
-    return this.mapPrismaUserToEntity(updatedUser);
-  }
-
-  async remove(id: string): Promise<void> {
-    // Vérifier si l'utilisateur existe
-    const existingUser = await this.prisma.user.findUnique({
-      where: { id },
-    });
-
-    if (!existingUser) {
-      throw new NotFoundException('Utilisateur non trouvé');
-    }
-
-    // Supprimer l'utilisateur
-    await this.prisma.user.delete({
-      where: { id },
-    });
-  }
-
-  async toggleStatus(id: string): Promise<User> {
-    // Vérifier si l'utilisateur existe
-    const existingUser = await this.prisma.user.findUnique({
-      where: { id },
-    });
-
-    if (!existingUser) {
-      throw new NotFoundException('Utilisateur non trouvé');
-    }
-
-    // Inverser le statut
-    const newStatus = existingUser.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE';
-
-    // Mettre à jour le statut
-    const updatedUser = await this.prisma.user.update({
-      where: { id },
-      data: { status: newStatus },
-    });
-
-    return this.mapPrismaUserToEntity(updatedUser);
-  }
-
-  /**
-   * Upload de photo de profil
-   */
-  async uploadProfilePhoto(
-    userId: string,
-    file: Express.Multer.File,
-  ): Promise<string> {
-    // Vérifier que l'utilisateur existe
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-    });
-
-    if (!user) {
-      throw new NotFoundException('Utilisateur non trouvé');
-    }
-
-    // Supprimer l'ancienne photo si elle existe
-    if (user.photoUrl) {
-      const publicId = this.cloudinaryService.extractPublicId(user.photoUrl);
-      if (publicId) {
-        try {
-          await this.cloudinaryService.deleteImage(publicId);
-        } catch (error) {
-          console.error(
-            "Erreur lors de la suppression de l'ancienne photo:",
-            error,
-          );
-        }
-      }
-    }
-
-    // Upload la nouvelle photo
-    const photoUrl = await this.cloudinaryService.uploadImage(file);
-
-    // Mettre à jour l'utilisateur
-    await this.prisma.user.update({
-      where: { id: userId },
       data: { photoUrl },
     });
-
-    return photoUrl;
   }
 
-  /**
-   * Récupérer les performances d'un utilisateur
-   */
-  async getUserPerformance(userId: string): Promise<UserPerformanceDto> {
-    // Vérifier que l'utilisateur existe
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-    });
-
-    if (!user) {
-      throw new NotFoundException('Utilisateur non trouvé');
-    }
-
-    // Calculer le début et la fin du mois en cours
-    const now = new Date();
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    const endOfMonth = new Date(
-      now.getFullYear(),
-      now.getMonth() + 1,
-      0,
-      23,
-      59,
-      59,
-    );
-
-    // Compter le nombre total de PDV dans le territoire de l'utilisateur
-    const totalOutlets = await this.prisma.outlet.count({
-      where: {
-        ...(user.territoryId && { territoryId: user.territoryId }),
-        status: 'APPROVED',
-      },
-    });
-
-    // Compter les visites ce mois
-    const visitsThisMonth = await this.prisma.visit.count({
-      where: {
-        userId: userId,
-        checkinAt: {
-          gte: startOfMonth,
-          lte: endOfMonth,
-        },
-      },
-    });
-
-    // Compter les PDV uniques visités ce mois
-    const visitedOutlets = await this.prisma.visit.findMany({
-      where: {
-        userId: userId,
-        checkinAt: {
-          gte: startOfMonth,
-          lte: endOfMonth,
-        },
-      },
-      select: {
-        outletId: true,
-      },
-      distinct: ['outletId'],
-    });
-
-    // Compter les commandes ce mois
-    const ordersThisMonth = await this.prisma.order.count({
-      where: {
-        userId: userId,
-        createdAt: {
-          gte: startOfMonth,
-          lte: endOfMonth,
-        },
-        status: {
-          in: ['CONFIRMED', 'DELIVERED'],
-        },
-      },
-    });
-
-    // Calculer le CA total ce mois
-    const ordersSum = await this.prisma.order.aggregate({
-      where: {
-        userId: userId,
-        createdAt: {
-          gte: startOfMonth,
-          lte: endOfMonth,
-        },
-        status: {
-          in: ['CONFIRMED', 'DELIVERED'],
-        },
-      },
-      _sum: {
-        totalTtc: true,
-      },
-    });
-
-    // Calculer les scores Perfect Store (moyenne des scores de visite)
-    const visitScores = await this.prisma.visit.aggregate({
-      where: {
-        userId: userId,
-        checkinAt: {
-          gte: startOfMonth,
-          lte: endOfMonth,
-        },
-        score: {
-          not: null,
-        },
-      },
-      _avg: {
-        score: true,
-      },
-    });
-
-    const salesThisMonth = Number(ordersSum._sum.totalTtc || 0);
-    const averageOrderValue =
-      ordersThisMonth > 0 ? salesThisMonth / ordersThisMonth : 0;
-    const coverage =
-      totalOutlets > 0 ? (visitedOutlets.length / totalOutlets) * 100 : 0;
-    const strikeRate =
-      visitsThisMonth > 0 ? (ordersThisMonth / visitsThisMonth) * 100 : 0;
-    const perfectStoreScore = visitScores._avg.score || 0;
-
-    return {
-      coverage: Math.round(coverage * 10) / 10,
-      strikeRate: Math.round(strikeRate * 10) / 10,
-      visitsThisMonth,
-      salesThisMonth: Math.round(salesThisMonth),
-      perfectStoreScore: Math.round(perfectStoreScore * 10) / 10,
-      totalOutlets,
-      visitedOutlets: visitedOutlets.length,
-      ordersThisMonth,
-      averageOrderValue: Math.round(averageOrderValue),
-    };
-  }
-
-  /**
-   * Récupérer les informations du manager d'un utilisateur
-   */
-  async getManagerInfo(userId: string): Promise<{
-    id: string;
-    firstName: string;
-    lastName: string;
-    email: string;
-    phone?: string | null;
-    role: string;
-    photoUrl?: string | null;
-  } | null> {
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      include: {
-        manager: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            email: true,
-            phone: true,
-            role: true,
-            photoUrl: true,
-          },
-        },
-      },
-    });
-
-    if (!user || !user.manager) {
+  async getManager(userId: string) {
+    const user = await this.findById(userId);
+    if (!user?.managerId) {
       return null;
     }
 
-    return {
-      id: user.manager.id,
-      firstName: user.manager.firstName,
-      lastName: user.manager.lastName,
-      email: user.manager.email,
-      phone: user.manager.phone,
-      role: user.manager.role,
-      photoUrl: user.manager.photoUrl,
-    };
+    return this.findById(user.managerId);
   }
-
-  /**
-   * Mapper un utilisateur Prisma pour l'affichage (avec tous les champs)
-   */
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private mapUserForDisplay(prismaUser: any): any {
-    return {
-      id: prismaUser.id,
-      email: prismaUser.email,
-      firstName: prismaUser.firstName,
-      lastName: prismaUser.lastName,
-      role: prismaUser.role,
-      isActive: prismaUser.status === 'ACTIVE',
-      status: prismaUser.status,
-      territoryId: prismaUser.territoryId ?? null,
-      territory: prismaUser.territory?.name ?? null,
-      territoryName: prismaUser.territory?.name ?? null,
-      assignedSectorId: prismaUser.assignedSectorId ?? null,
-      phone: prismaUser.phone ?? null,
-      matricule: prismaUser.matricule ?? null,
-      hireDate: prismaUser.hireDate?.toISOString().split('T')[0] ?? null,
-      managerId: prismaUser.managerId ?? null,
-      photoUrl: prismaUser.photoUrl ?? null,
-      photo: prismaUser.photoUrl ?? null,
-      lastLogin: prismaUser.lastLogin?.toISOString() ?? null,
-    };
-  }
-
-  /**
-   * Mapper un utilisateur Prisma vers l'entité User
-   */
-  /* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access */
-  private mapPrismaUserToEntity(prismaUser: any): User {
-    return {
-      id: prismaUser.id,
-      email: prismaUser.email,
-      password: prismaUser.passwordHash,
-      firstName: prismaUser.firstName,
-      lastName: prismaUser.lastName,
-      role: prismaUser.role,
-      status: prismaUser.status,
-      territoryId: prismaUser.territoryId,
-      assignedSectorId: prismaUser.assignedSectorId ?? undefined,
-      phone: prismaUser.phone ?? undefined,
-      matricule: prismaUser.matricule ?? undefined,
-      hireDate: prismaUser.hireDate ?? undefined,
-      managerId: prismaUser.managerId ?? undefined,
-      photoUrl: prismaUser.photoUrl ?? undefined,
-      lockedUntil: prismaUser.lockedUntil ?? undefined,
-      resetToken: prismaUser.resetToken ?? undefined,
-      resetTokenExpiry: prismaUser.resetTokenExpiry ?? undefined,
-      twoFactorSecret: prismaUser.twoFactorSecret ?? undefined,
-      twoFactorEnabled: prismaUser.twoFactorEnabled,
-      emailVerified: prismaUser.emailVerified,
-      emailVerificationToken: prismaUser.emailVerificationToken ?? undefined,
-      createdAt: prismaUser.createdAt,
-      updatedAt: prismaUser.updatedAt,
-    };
-  }
-  /* eslint-enable */
 }

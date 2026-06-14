@@ -1,209 +1,152 @@
-import {
-  Controller,
-  Get,
-  Post,
-  Patch,
-  Delete,
-  Body,
-  Param,
-  UseGuards,
-  HttpCode,
-  HttpStatus,
-  UseInterceptors,
-  UploadedFile,
-  BadRequestException,
-  Request,
-} from '@nestjs/common';
-import { FileInterceptor } from '@nestjs/platform-express';
+import { Controller, Get, Post, Put, Delete, Patch, Body, Param, UseGuards, Request, Query } from '@nestjs/common';
+import { AuthGuard } from '@nestjs/passport';
+import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { UsersService } from './users.service';
-import { CreateUserDto } from './dto/create-user.dto';
-import { UpdateUserDto } from './dto/update-user.dto';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
-interface RequestWithUser {
-  user?: {
-    userId?: string;
-    role?: string;
-  };
-}
-
+@ApiTags('Users')
 @Controller('users')
-@UseGuards(JwtAuthGuard)
 export class UsersController {
-  constructor(private readonly usersService: UsersService) {}
+  constructor(private usersService: UsersService) {}
 
-  /**
-   * Récupérer tous les utilisateurs (filtrés selon le rôle)
-   */
   @Get()
-  async findAll(@Request() req: RequestWithUser) {
-    const currentUserId = req.user?.userId;
-    const users = await this.usersService.findAll(currentUserId);
+  @UseGuards(AuthGuard('jwt'))
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get all users' })
+  async findAll(@Query('role') role?: string, @Query('territoryId') territoryId?: string) {
+    const users = await this.usersService.findAll({ role: role as any, territoryId });
     return {
       success: true,
       data: users,
-      message: 'Utilisateurs récupérés avec succès',
+      message: 'Users retrieved successfully',
     };
   }
 
-  /**
-   * Récupérer les managers (SUP et ADMIN)
-   */
-  @Get('managers/list')
-  async getManagers() {
-    const managers = await this.usersService.getManagers();
-    return {
-      success: true,
-      data: managers,
-      message: 'Managers récupérés avec succès',
-    };
-  }
-
-  /**
-   * Récupérer tous les vendeurs et administrateurs pour la page Team
-   */
   @Get('team/all')
-  async getTeamMembers() {
-    const teamMembers = await this.usersService.getTeamMembers();
+  @UseGuards(AuthGuard('jwt'))
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get team members' })
+  async getTeamMembers(@Request() req) {
+    const users = await this.usersService.getTeamMembers(req.user.id);
     return {
       success: true,
-      data: teamMembers,
-      message: "Membres de l'équipe récupérés avec succès",
+      data: users,
+      message: 'Team members retrieved successfully',
     };
   }
 
-  /**
-   * Récupérer un utilisateur par ID
-   */
+  @Get('managers/list')
+  @UseGuards(AuthGuard('jwt'))
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get all managers' })
+  async getManagers() {
+    const users = await this.usersService.findAll({ role: 'SUP' as any });
+    return {
+      success: true,
+      data: users,
+      message: 'Managers retrieved successfully',
+    };
+  }
+
   @Get(':id')
-  async findOne(@Param('id') id: string) {
-    const user = await this.usersService.findByIdWithRelations(id);
+  @UseGuards(AuthGuard('jwt'))
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get user by ID' })
+  async findById(@Param('id') id: string) {
+    const user = await this.usersService.findById(id);
     return {
       success: true,
       data: user,
-      message: 'Utilisateur récupéré avec succès',
+      message: 'User retrieved successfully',
     };
   }
 
-  /**
-   * Créer un nouvel utilisateur
-   */
   @Post()
-  @HttpCode(HttpStatus.CREATED)
-  async create(
-    @Body() createUserDto: CreateUserDto,
-    @Request() req: RequestWithUser,
-  ) {
-    const creatorId = req.user?.userId;
-    const user = await this.usersService.create(createUserDto, creatorId);
+  @UseGuards(AuthGuard('jwt'))
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Create new user' })
+  async create(@Body() userData: any) {
+    const user = await this.usersService.create(userData);
     return {
       success: true,
       data: user,
-      message: 'Utilisateur créé avec succès',
+      message: 'User created successfully',
     };
   }
 
-  /**
-   * Mettre à jour un utilisateur
-   */
-  @Patch(':id')
-  async update(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto) {
-    const user = await this.usersService.update(id, updateUserDto);
+  @Put(':id')
+  @UseGuards(AuthGuard('jwt'))
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Update user' })
+  async update(@Param('id') id: string, @Body() userData: any) {
+    const user = await this.usersService.update(id, userData);
     return {
       success: true,
       data: user,
-      message: 'Utilisateur mis à jour avec succès',
+      message: 'User updated successfully',
     };
   }
 
-  /**
-   * Supprimer un utilisateur
-   */
   @Delete(':id')
-  @HttpCode(HttpStatus.OK)
-  async remove(@Param('id') id: string) {
-    await this.usersService.remove(id);
+  @UseGuards(AuthGuard('jwt'))
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Delete user' })
+  async delete(@Param('id') id: string) {
+    await this.usersService.delete(id);
     return {
       success: true,
-      message: 'Utilisateur supprimé avec succès',
+      message: 'User deleted successfully',
     };
   }
 
-  /**
-   * Suspendre/Activer un utilisateur
-   */
   @Patch(':id/toggle-status')
+  @UseGuards(AuthGuard('jwt'))
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Toggle user status' })
   async toggleStatus(@Param('id') id: string) {
     const user = await this.usersService.toggleStatus(id);
     return {
       success: true,
       data: user,
-      message: `Utilisateur ${user.status === 'ACTIVE' ? 'activé' : 'suspendu'} avec succès`,
+      message: 'User status toggled successfully',
     };
   }
 
-  /**
-   * Récupérer les performances d'un utilisateur
-   */
   @Get(':id/performance')
+  @UseGuards(AuthGuard('jwt'))
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get user performance' })
   async getPerformance(@Param('id') id: string) {
-    const performance = await this.usersService.getUserPerformance(id);
+    const performance = await this.usersService.getPerformance(id);
     return {
       success: true,
       data: performance,
-      message: 'Performances récupérées avec succès',
+      message: 'Performance retrieved successfully',
     };
   }
 
-  /**
-   * Récupérer les informations du manager d'un utilisateur
-   */
+  @Post(':id/upload-photo')
+  @UseGuards(AuthGuard('jwt'))
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Upload user photo' })
+  async uploadPhoto(@Param('id') id: string, @Body('photoUrl') photoUrl: string) {
+    const user = await this.usersService.uploadPhoto(id, photoUrl);
+    return {
+      success: true,
+      data: { photoUrl: user.photoUrl },
+      message: 'Photo uploaded successfully',
+    };
+  }
+
   @Get(':id/manager')
+  @UseGuards(AuthGuard('jwt'))
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get user manager' })
   async getManager(@Param('id') id: string) {
-    const manager = await this.usersService.getManagerInfo(id);
+    const manager = await this.usersService.getManager(id);
     return {
       success: true,
       data: manager,
-      message: 'Informations du manager récupérées avec succès',
-    };
-  }
-
-  /**
-   * Upload de photo de profil
-   */
-  @Post(':id/upload-photo')
-  @UseInterceptors(FileInterceptor('photo'))
-  async uploadPhoto(
-    @Param('id') id: string,
-    @UploadedFile() file: Express.Multer.File,
-  ) {
-    if (!file) {
-      throw new BadRequestException('Aucun fichier fourni');
-    }
-
-    // Vérifier le type de fichier
-    const allowedMimeTypes = [
-      'image/jpeg',
-      'image/png',
-      'image/jpg',
-      'image/webp',
-    ];
-    if (!allowedMimeTypes.includes(file.mimetype)) {
-      throw new BadRequestException(
-        'Type de fichier non supporté. Utilisez JPG, PNG ou WEBP',
-      );
-    }
-
-    // Vérifier la taille (max 5MB)
-    if (file.size > 5 * 1024 * 1024) {
-      throw new BadRequestException('Le fichier est trop volumineux (max 5MB)');
-    }
-
-    const photoUrl = await this.usersService.uploadProfilePhoto(id, file);
-    return {
-      success: true,
-      data: { photoUrl },
-      message: 'Photo de profil mise à jour avec succès',
+      message: 'Manager retrieved successfully',
     };
   }
 }

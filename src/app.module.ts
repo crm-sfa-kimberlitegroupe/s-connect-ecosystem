@@ -1,44 +1,35 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { AppController } from './app.controller';
-import { AppService } from './app.service';
+import { PrismaModule } from './prisma/prisma.module';
+
+// Modules de base
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
-import { PrismaModule } from './prisma/prisma.module';
 import { TerritoriesModule } from './territories/territories.module';
 import { OutletsModule } from './outlets/outlets.module';
-import { RoutesModule } from './routes/routes.module';
-// import { SKUsModule } from './skus/skus.module'; // Remplace par ProductsModule
-import { VendorStockModule } from './vendor-stock/vendor-stock.module';
-import { ProductsModule } from './products/products.module';
-import { PromotionsModule } from './promotions/promotions.module';
-import { OrdersModule } from './orders/orders.module';
+import { CloudinaryModule } from './cloudinary/cloudinary.module';
 import { VisitsModule } from './visits/visits.module';
-import { RoutePlansModule } from './route-plans/route-plans.module';
-import { MerchandisingModule } from './merchandising/merchandising.module';
+
+// Modules ML avancés
+import { QueueModule } from './queue/queue.module';
+import { OrderIntelligenceModule } from './order-intelligence/order-intelligence.module';
+import { AnalyticsModule } from './analytics/analytics.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: ['.env.local', '.env.development', '.env'],
     }),
     PrismaModule,
     AuthModule,
     UsersModule,
     TerritoriesModule,
     OutletsModule,
-    RoutesModule,
-    // SKUsModule, // Temporairement desactive - remplace par ProductsModule
-    VendorStockModule,
-    ProductsModule,
-    PromotionsModule,
-    OrdersModule,
+    CloudinaryModule,
     VisitsModule,
-    RoutePlansModule,
-    MerchandisingModule,
+    QueueModule,
+    OrderIntelligenceModule,
+    AnalyticsModule,
   ],
-  controllers: [AppController],
-  providers: [AppService],
 })
 export class AppModule {}

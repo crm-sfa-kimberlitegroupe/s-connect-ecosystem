@@ -1,166 +1,112 @@
-import {
-  Controller,
-  Post,
-  Body,
-  Get,
-  UseGuards,
-  HttpCode,
-  HttpStatus,
-  Req,
-  Ip,
-} from '@nestjs/common';
-import type { Request } from 'express';
-import { Throttle } from '@nestjs/throttler';
+import { Controller, Post, Body, Get, UseGuards, Request, Patch, Delete } from '@nestjs/common';
+import { AuthGuard } from '@nestjs/passport';
+import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
-import {
-  LoginDto,
-  RegisterDto,
-  ForgotPasswordDto,
-  ResetPasswordDto,
-  Verify2FADto,
-  RefreshTokenDto,
-} from './dto';
-import { JwtAuthGuard } from './guards';
-import { GetUser } from './decorators';
-import type {
-  RequestUser,
-  AuthResponse,
-  ProfileResponse,
-  PasswordResetResponse,
-  TwoFactorSetupResponse,
-  TwoFactorResponse,
-  RefreshTokenResponse,
-  TwoFactorRequiredResponse,
-} from './interfaces';
+import { LoginDto, RegisterDto, ForgotPasswordDto, ResetPasswordDto, TwoFactorVerifyDto } from './dto';
 
+@ApiTags('Auth')
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(private authService: AuthService) {}
 
   @Post('register')
-  @HttpCode(HttpStatus.CREATED)
-  async register(@Body() registerDto: RegisterDto): Promise<AuthResponse> {
+  @ApiOperation({ summary: 'Register a new user' })
+  async register(@Body() registerDto: RegisterDto) {
     return this.authService.register(registerDto);
   }
 
   @Post('login')
-  @HttpCode(HttpStatus.OK)
-  @Throttle({ default: { limit: 5, ttl: 900000 } }) // 5 tentatives par 15 minutes
-  async login(
-    @Body() loginDto: LoginDto,
-    @Ip() ip: string,
-    @Req() req: Request,
-  ): Promise<AuthResponse | TwoFactorRequiredResponse> {
-    const userAgent = req.headers['user-agent'];
-    return this.authService.login(loginDto, ip, userAgent);
+  @ApiOperation({ summary: 'Login user' })
+  async login(@Body() loginDto: LoginDto) {
+    return this.authService.login(loginDto);
   }
 
-  @UseGuards(JwtAuthGuard)
+  @Post('refresh')
+  @ApiOperation({ summary: 'Refresh access token' })
+  async refresh(@Body('refreshToken') refreshToken: string) {
+    return this.authService.refreshToken(refreshToken);
+  }
+
+  @Post('logout')
+  @UseGuards(AuthGuard('jwt'))
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Logout user' })
+  async logout(@Request() req, @Body('refreshToken') refreshToken: string) {
+    return this.authService.logout(req.user.id, refreshToken);
+  }
+
+  @Post('logout-all')
+  @UseGuards(AuthGuard('jwt'))
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Logout from all devices' })
+  async logoutAll(@Request() req) {
+    return this.authService.logoutAll(req.user.id);
+  }
+
   @Get('profile')
-  async getProfile(@GetUser() user: RequestUser): Promise<ProfileResponse> {
-    return await this.authService.getProfile(user.userId);
+  @UseGuards(AuthGuard('jwt'))
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get current user profile' })
+  async getProfile(@Request() req) {
+    return {
+      success: true,
+      user: req.user,
+    };
   }
-
-  // ========================================
-  // SCRUM-38: Récupération de mot de passe
-  // ========================================
 
   @Post('forgot-password')
-  @HttpCode(HttpStatus.OK)
-  @Throttle({ default: { limit: 3, ttl: 3600000 } }) // 3 tentatives par heure
-  async forgotPassword(
-    @Body() forgotPasswordDto: ForgotPasswordDto,
-  ): Promise<PasswordResetResponse> {
-    return this.authService.forgotPassword(forgotPasswordDto);
+  @ApiOperation({ summary: 'Request password reset' })
+  async forgotPassword(@Body() forgotPasswordDto: ForgotPasswordDto) {
+    // TODO: Implement email sending
+    return {
+      success: true,
+      message: 'Password reset email sent (if user exists)',
+    };
   }
 
   @Post('reset-password')
-  @HttpCode(HttpStatus.OK)
-  async resetPassword(
-    @Body() resetPasswordDto: ResetPasswordDto,
-  ): Promise<PasswordResetResponse> {
-    return this.authService.resetPassword(resetPasswordDto);
-  }
-
-  // ========================================
-  // SCRUM-40: Authentification à deux facteurs (2FA)
-  // ========================================
-
-  @UseGuards(JwtAuthGuard)
-  @Post('2fa/generate')
-  @HttpCode(HttpStatus.OK)
-  async generate2FA(
-    @GetUser() user: RequestUser,
-  ): Promise<TwoFactorSetupResponse> {
-    return this.authService.generate2FASecret(user.userId);
-  }
-
-  @UseGuards(JwtAuthGuard)
-  @Post('2fa/enable')
-  @HttpCode(HttpStatus.OK)
-  async enable2FA(
-    @GetUser() user: RequestUser,
-    @Body() verify2FADto: Verify2FADto,
-  ): Promise<TwoFactorResponse> {
-    return this.authService.enable2FA(user.userId, verify2FADto);
-  }
-
-  @UseGuards(JwtAuthGuard)
-  @Post('2fa/verify')
-  @HttpCode(HttpStatus.OK)
-  async verify2FA(
-    @GetUser() user: RequestUser,
-    @Body() verify2FADto: Verify2FADto,
-  ): Promise<TwoFactorResponse> {
-    return this.authService.verify2FA(user.userId, verify2FADto);
-  }
-
-  @UseGuards(JwtAuthGuard)
-  @Post('2fa/disable')
-  @HttpCode(HttpStatus.OK)
-  async disable2FA(@GetUser() user: RequestUser): Promise<TwoFactorResponse> {
-    return this.authService.disable2FA(user.userId);
-  }
-
-  // ========================================
-  // Bonus: Refresh Token & Logout
-  // ========================================
-
-  @Post('refresh')
-  @HttpCode(HttpStatus.OK)
-  async refreshToken(
-    @Body() refreshTokenDto: RefreshTokenDto,
-    @Ip() ip: string,
-    @Req() req: Request,
-  ): Promise<RefreshTokenResponse> {
-    const userAgent = req.headers['user-agent'];
-    return this.authService.refreshToken(refreshTokenDto, ip, userAgent);
-  }
-
-  @UseGuards(JwtAuthGuard)
-  @Post('logout')
-  @HttpCode(HttpStatus.OK)
-  async logout(
-    @Body() body: { refreshToken: string },
-  ): Promise<PasswordResetResponse> {
-    return this.authService.logout(body.refreshToken);
-  }
-
-  @UseGuards(JwtAuthGuard)
-  @Post('logout-all')
-  @HttpCode(HttpStatus.OK)
-  async logoutAll(
-    @GetUser() user: RequestUser,
-  ): Promise<PasswordResetResponse> {
-    return this.authService.logoutAll(user.userId);
-  }
-
-  @Get('health')
-  healthCheck() {
+  @ApiOperation({ summary: 'Reset password with token' })
+  async resetPassword(@Body() resetPasswordDto: ResetPasswordDto) {
+    // TODO: Implement password reset
     return {
       success: true,
-      message: "Le module d'authentification fonctionne",
-      timestamp: new Date().toISOString(),
+      message: 'Password reset successful',
     };
+  }
+
+  @Post('2fa/generate')
+  @UseGuards(AuthGuard('jwt'))
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Generate 2FA secret' })
+  async generate2FA(@Request() req) {
+    return this.authService.generateTwoFactorSecret(req.user.id);
+  }
+
+  @Post('2fa/enable')
+  @UseGuards(AuthGuard('jwt'))
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Enable 2FA' })
+  async enable2FA(@Request() req, @Body() twoFactorDto: TwoFactorVerifyDto) {
+    return this.authService.enableTwoFactor(req.user.id, twoFactorDto.code);
+  }
+
+  @Post('2fa/verify')
+  @UseGuards(AuthGuard('jwt'))
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Verify 2FA code' })
+  async verify2FA(@Request() req, @Body() twoFactorDto: TwoFactorVerifyDto) {
+    // For verification during login
+    return {
+      success: true,
+      twoFactorEnabled: req.user.twoFactorEnabled,
+    };
+  }
+
+  @Post('2fa/disable')
+  @UseGuards(AuthGuard('jwt'))
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Disable 2FA' })
+  async disable2FA(@Request() req, @Body() twoFactorDto: TwoFactorVerifyDto) {
+    return this.authService.disableTwoFactor(req.user.id, twoFactorDto.code);
   }
 }

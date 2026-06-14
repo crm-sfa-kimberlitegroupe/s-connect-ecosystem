@@ -7,7 +7,7 @@ import {
   IsEnum,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { OutletStatusEnum } from '@prisma/client';
+import { OutletStatusEnum } from '../../common/types/prisma-types';
 import { OsmMetadata } from './osm-metadata.interface';
 
 export class CreateOutletDto {

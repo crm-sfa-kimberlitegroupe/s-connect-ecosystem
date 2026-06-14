@@ -1,34 +1,27 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
-import { ExtractJwt, Strategy, StrategyOptions } from 'passport-jwt';
-import { AuthService } from '../auth.service';
-import { JwtPayload, RequestUser } from '../interfaces';
-import { AUTH_ERRORS } from '../constants';
+import { ExtractJwt, Strategy } from 'passport-jwt';
+import { ConfigService } from '@nestjs/config';
+import { UsersService } from '../../users/users.service';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
-  constructor(private readonly authService: AuthService) {
-    const options: StrategyOptions = {
+  constructor(
+    private configService: ConfigService,
+    private usersService: UsersService,
+  ) {
+    super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey:
-        process.env.JWT_SECRET || 'votre-secret-jwt-super-securise-changez-moi',
-    };
-    super(options);
+      secretOrKey: configService.get<string>('JWT_SECRET'),
+    });
   }
 
-  async validate(payload: JwtPayload): Promise<RequestUser> {
-    const user = await this.authService.validateUser(payload.sub);
-
-    if (!user) {
-      throw new UnauthorizedException(AUTH_ERRORS.USER_NOT_FOUND);
+  async validate(payload: any) {
+    const user = await this.usersService.findById(payload.sub);
+    if (!user || !user.isActive) {
+      throw new UnauthorizedException('User not found or inactive');
     }
-
-    return {
-      userId: payload.sub,
-      email: payload.email,
-      role: user.role, // ✅ Ajouter le rôle pour le RolesGuard
-      territoryId: payload.territoryId || user.territoryId, // ✅ Ajouter le territoryId du JWT ou de la DB
-    };
+    return user;
   }
 }

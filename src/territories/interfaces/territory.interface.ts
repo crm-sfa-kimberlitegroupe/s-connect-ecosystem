@@ -3,7 +3,7 @@
  * Remplace les 'any' pour un code type-safe
  */
 
-import { TerritoryLevelEnum, PotentielCommercialEnum, CategorieMarche, TypeZone } from '@prisma/client';
+import { TerritoryLevelEnum, PotentielCommercialEnum, CategorieMarche, TypeZone } from '../../common/types/prisma-types';
 
 /**
  * Données complètes d'un territoire (retournées par l'API)

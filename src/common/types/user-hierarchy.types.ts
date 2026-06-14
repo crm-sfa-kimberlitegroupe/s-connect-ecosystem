@@ -3,7 +3,11 @@
  * Améliore la maintenabilité et évite les erreurs de logique métier
  */
 
-import { RoleEnum } from '@prisma/client';
+export enum RoleEnum {
+  ADMIN = 'ADMIN',
+  SUP = 'SUP',
+  REP = 'REP'
+}
 
 /**
  * Représente un utilisateur avec son manager (relation hiérarchique)

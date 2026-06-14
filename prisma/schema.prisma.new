@@ -1,0 +1,621 @@
+// SFA Database Schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// USERS & AUTH
+// ============================================
+
+// SQLite n'utilise pas les enums, on utilise des strings avec des valeurs par défaut
+
+model User {
+  id                String       @id @default(uuid())
+  email             String       @unique
+  password          String
+  firstName         String
+  lastName          String
+  role              String       @default("REP")  // REP, ADMIN, SUP
+  phone             String
+  matricule         String       @unique
+  photoUrl          String?
+  hireDate          DateTime?
+
+  // Admin ID for territory administration
+  adminId           String?
+
+  // Territory assignment
+  territoryId       String?
+  assignedSectorId  String?
+  
+  // Management hierarchy
+  managerId         String?
+  manager           User?        @relation("VendorManager", fields: [managerId], references: [id])
+  vendors           User[]       @relation("VendorManager")
+  
+  // Status
+  isActive          Boolean      @default(true)
+  status            String       @default("ACTIVE")  // ACTIVE, INACTIVE, SUSPENDED
+  
+  // 2FA
+  twoFactorEnabled  Boolean      @default(false)
+  twoFactorSecret   String?
+  
+  // Timestamps
+  lastLogin         DateTime?
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+  
+  // Relations
+  refreshTokens     RefreshToken[]
+  proposedOutlets   Outlet[]     @relation("OutletProposer")
+  validatedOutlets  Outlet[]     @relation("OutletValidator")
+  visits            Visit[]
+  orders            Order[]
+  vendorStockItems  VendorStockItem[]
+  merchandisingChecks MerchandisingCheck[]
+  
+  // Training
+  enrollments      Enrollment[]
+  userPoints         UserPoints[]
+  userLevel         UserLevel[] @relation("UserLevel")
+  userAssessments   UserAssessment[] @relation("UserAssessments")
+  
+  @@index([email])
+  @@index([role])
+  @@index([territoryId])
+  @@index([assignedSectorId])
+  @@index([managerId])
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  
+  @@index([token])
+  @@index([userId])
+}
+
+// ============================================
+// TERRITORIES & SECTORS
+// ============================================
+
+model Territory {
+  id                String         @id @default(uuid())
+  code              String         @unique
+  name              String
+  level             String         @default("SECTEUR")  // PAYS, REGION, ZONE, SECTEUR
+  
+  // Hierarchy
+  parentId          String?
+  parent            Territory?     @relation("TerritoryHierarchy", fields: [parentId], references: [id])
+  children          Territory[]    @relation("TerritoryHierarchy")
+
+  // Admin assignment (for ZONE level)
+  adminId           String?
+  
+  // Geographic info
+  lat               Float?
+  lng               Float?
+  regions           String[]
+  communes          String[]
+  villes            String[]
+  quartiers         String[]
+  codesPostaux      String[]
+  
+  // Demographics
+  population        Int?
+  superficie        Float?
+  densitePopulation Float?
+  
+  // Commercial info
+  potentielCommercial String?
+  categorieMarche    String?
+  typeZone           String?
+  nombrePDVEstime     Int?
+  tauxPenetration     Float?
+  
+  // Metadata
+  notes             String?
+  isActive          Boolean        @default(true)
+  createdBy         String?
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+  
+  // Relations
+  outlets           Outlet[]
+
+  @@index([code])
+  @@index([level])
+  @@index([parentId])
+}
+
+// ============================================
+// OUTLETS (POINTS DE VENTE)
+// ============================================
+
+model Outlet {
+  id                String       @id @default(uuid())
+  code              String       @unique
+  name              String
+  channel           String       // GT, MT, HORECA, PROXI, DISTRIB
+  segment           String?      // A, B, C
+  address           String?
+  lat               Float?
+  lng               Float
+  
+  // Open hours
+  openHours         Json?
+  
+  // Territory assignment
+  territoryId       String
+  territory         Territory    @relation(fields: [territoryId], references: [id])
+  sectorId          String?
+  
+  // Status
+  status            String       @default("PENDING")  // PENDING, APPROVED, REJECTED, INACTIVE
+  
+  // Workflow
+  proposedBy        String?
+  proposer          User?        @relation("OutletProposer", fields: [proposedBy], references: [id])
+  validatedBy       String?
+  validator         User?        @relation("OutletValidator", fields: [validatedBy], references: [id])
+  validatedAt       DateTime?
+  validationComment String?
+  
+  // OSM integration
+  osmPlaceId        String?
+  osmMetadata       Json?
+  
+  // Timestamps
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+  
+  // Relations
+  visits            Visit[]
+  orders            Order[]
+  
+  @@index([code])
+  @@index([territoryId])
+  @@index([sectorId])
+  @@index([status])
+  @@index([proposedBy])
+}
+
+// ============================================
+// PRODUCTS & SKU
+// ============================================
+
+model Category {
+  id          String    @id @default(uuid())
+  name        String    @unique
+  displayName String?
+  subcategories SubCategory[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model SubCategory {
+  id          String    @id @default(uuid())
+  name        String
+  displayName String?
+  categoryId  String
+  category    Category  @relation(fields: [categoryId], references: [id])
+  brands      Brand[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  
+  @@unique([categoryId, name])
+  @@index([categoryId])
+}
+
+model Brand {
+  id            String       @id @default(uuid())
+  name          String
+  displayName   String?
+  subCategoryId String
+  subCategory   SubCategory  @relation(fields: [subCategoryId], references: [id])
+  packFormats   PackFormat[]
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  
+  @@unique([subCategoryId, name])
+  @@index([subCategoryId])
+}
+
+model PackFormat {
+  id            String      @id @default(uuid())
+  name          String
+  displayName   String?
+  brandId       String
+  brand         Brand       @relation(fields: [brandId], references: [id])
+  packSizes     PackSize[]
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  
+  @@unique([brandId, name])
+  @@index([brandId])
+}
+
+model PackSize {
+  id            String      @id @default(uuid())
+  name          String
+  displayName   String?
+  ean           String      @unique
+  packFormatId  String
+  packFormat    PackFormat  @relation(fields: [packFormatId], references: [id])
+  description   String?     // Description principale du produit
+  shortDescription String?
+  fullDescription String?
+  photo         String?     // URL de la photo Cloudinary
+  priceHt       Float
+  vatRate       Float       @default(19.6)
+  active        Boolean     @default(true)
+  
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  
+  // Relations
+  stockItems    VendorStockItem[]
+  orderItems    OrderItem[]
+  merchItems    MerchItem[]
+  
+  @@index([ean])
+  @@index([packFormatId])
+  @@index([active])
+}
+
+// ============================================
+// ORDERS
+// ============================================
+
+model Order {
+  id              String      @id @default(uuid())
+  orderNumber     String      @unique
+  outletId        String
+  outlet          Outlet      @relation(fields: [outletId], references: [id])
+  userId          String
+  user            User        @relation(fields: [userId], references: [id])
+  visitId         String?
+  visit           Visit?      @relation(fields: [visitId], references: [id])
+  
+  status          String      @default("PENDING")  // PENDING, CONFIRMED, DELIVERED, CANCELLED
+  
+  // Pricing
+  totalHt         Float
+  totalTtc        Float
+  vatRate         Float       @default(19.6)
+  
+  // Payment
+  paymentMethod   String?
+  paymentStatus   String      @default("PENDING")
+  
+  // Notes
+  notes           String?
+  
+  // Timestamps
+  orderDate       DateTime    @default(now())
+  deliveryDate    DateTime?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  
+  // Relations
+  items           OrderItem[]
+  
+  @@index([orderNumber])
+  @@index([outletId])
+  @@index([userId])
+  @@index([status])
+  @@index([orderDate])
+}
+
+model OrderItem {
+  id          String   @id @default(uuid())
+  orderId     String
+  order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  skuId       String
+  sku         PackSize @relation(fields: [skuId], references: [id])
+  quantity    Int
+  unitPriceHt Float
+  totalPriceHt Float
+  totalPriceTtc Float
+  
+  createdAt   DateTime @default(now())
+  
+  @@index([orderId])
+  @@index([skuId])
+}
+
+// ============================================
+// VISITS
+// ============================================
+
+model Visit {
+  id              String      @id @default(uuid())
+  outletId        String
+  outlet          Outlet      @relation(fields: [outletId], references: [id])
+  userId          String
+  user            User        @relation(fields: [userId], references: [id])
+  
+  status          String      @default("PLANNED")  // PLANNED, IN_PROGRESS, COMPLETED, CANCELLED
+  
+  // Check-in
+  checkinAt       DateTime?
+  checkinLat      Float?
+  checkinLng      Float?
+  
+  // Check-out
+  checkoutAt      DateTime?
+  checkoutLat     Float?
+  checkoutLng     Float?
+  durationMin     Int?
+  
+  // Score & Notes
+  score           Int?
+  notes           String?
+  
+  // Planned date
+  plannedDate     DateTime?
+  
+  // Timestamps
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  
+  // Relations
+  orders          Order[]
+  merchChecks     MerchandisingCheck[]
+  
+  @@index([outletId])
+  @@index([userId])
+  @@index([status])
+  @@index([plannedDate])
+}
+
+// ============================================
+// MERCHANDISING
+// ============================================
+
+model MerchandisingCheck {
+  id          String   @id @default(uuid())
+  visitId     String
+  visit       Visit    @relation(fields: [visitId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  
+  score       Int?
+  notes       String?
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // Relations
+  items       MerchItem[]
+  photos      MerchPhoto[]
+  
+  @@index([visitId])
+  @@index([userId])
+}
+
+model MerchItem {
+  id                String            @id @default(uuid())
+  merchCheckId      String
+  merchCheck        MerchandisingCheck @relation(fields: [merchCheckId], references: [id], onDelete: Cascade)
+  skuId             String
+  sku               PackSize          @relation(fields: [skuId], references: [id])
+  
+  isVisible         Boolean           @default(false)
+  isPriceCorrect    Boolean           @default(false)
+  isWellStocked     Boolean           @default(false)
+  comment           String?
+  
+  createdAt         DateTime          @default(now())
+  
+  @@index([merchCheckId])
+  @@index([skuId])
+}
+
+model MerchPhoto {
+  id           String   @id @default(uuid())
+  merchCheckId String
+  merchCheck   MerchandisingCheck @relation(fields: [merchCheckId], references: [id], onDelete: Cascade)
+  
+  fileKey      String
+  imageUrl     String?
+  lat          Float?
+  lng          Float?
+  takenAt      DateTime @default(now())
+  metadata     Json?
+  
+  createdAt    DateTime @default(now())
+  
+  @@index([merchCheckId])
+}
+
+// ============================================
+// VENDOR STOCK
+// ============================================
+
+model VendorStockItem {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  skuId       String
+  sku         PackSize @relation(fields: [skuId], references: [id])
+  
+  quantity    Int      @default(0)
+  
+  // Alerts
+  alertThreshold Int   @default(10)
+  
+  updatedAt   DateTime @updatedAt
+  createdAt   DateTime @default(now())
+  
+  // Relations
+  movements   StockMovement[]
+  
+  @@unique([userId, skuId])
+  @@index([userId])
+  @@index([skuId])
+}
+
+model StockMovement {
+  id          String        @id @default(uuid())
+  stockItemId String
+  stockItem   VendorStockItem @relation(fields: [stockItemId], references: [id], onDelete: Cascade)
+  
+  movementType String        // IN, OUT, ADJUSTMENT
+  quantity    Int
+  beforeQty   Int
+  afterQty    Int
+  notes       String?
+  
+  // Optional order reference
+  orderId     String?
+  
+  createdAt   DateTime     @default(now())
+  
+  @@index([stockItemId])
+  @@index([movementType])
+  @@index([createdAt])
+}
+
+// ============================================
+// SALES TRAINING
+// ============================================
+
+model Course {
+  id              String    @id @default(uuid())
+  title           String
+  description     String?
+  category        String
+  contentType     String    @default("document")  // video, interactive, document
+  contentUrl      String
+  duration        Int?      // minutes
+  targetRoles     String[]  // REP, ADMIN, SUP
+  
+  // Gamification
+  points          Int       @default(0)
+  badge           String?
+  
+  // Metadata
+  isPublished     Boolean   @default(false)
+  publishedAt     DateTime?
+  createdBy       String?
+  
+  // Timestamps
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  
+  // Relations
+  chapters        Chapter[]
+  enrollments     Enrollment[]
+  
+  @@index([category])
+  @@index([isPublished])
+}
+
+model Chapter {
+  id              String   @id @default(uuid())
+  courseId        String
+  course          Course   @relation(fields: [courseId], references: [id])
+  
+  title           String
+  description     String?
+  order           Int
+  
+  contentType     String
+  contentUrl      String
+  duration        Int?     // minutes
+  
+  quiz            Json?     // Quiz data if applicable
+  
+  createdAt       DateTime @default(now())
+  
+  @@unique([courseId, order])
+  @@index([courseId])
+}
+
+model Enrollment {
+  id              String   @id @default(uuid())
+  userId          String
+  courseId        String
+  user            User     @relation(fields: [userId], references: [id])
+  course          Course   @relation(fields: [courseId], references: [id])
+  
+  status          String   // not_started, in_progress, completed
+  progress        Float    @default(0) // percentage
+  
+  completedAt     DateTime?
+  
+  @@unique([userId, courseId])
+  @@index([userId])
+  @@index([courseId])
+}
+
+model Assessment {
+  id              String   @id @default(uuid())
+  courseId        String
+  title           String
+  questions       Json
+  
+  passingScore    Float
+  timeLimit       Int?     // minutes
+  
+  createdAt       DateTime @default(now())
+  
+  @@index([courseId])
+}
+
+model UserAssessment {
+  id              String   @id @default(uuid())
+  userId          String
+  assessmentId    String
+  user            User     @relation("UserAssessments", fields: [userId], references: [id])
+
+  score           Float
+  passed          Boolean
+  answers         Json
+  timeTaken       Int      // minutes
+
+  takenAt         DateTime @default(now())
+
+  @@index([userId])
+  @@index([assessmentId])
+}
+
+model UserPoints {
+  id              String   @id @default(uuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id])
+  
+  points          Int
+  action          String   // course_completed, quiz_passed, etc.
+  metadata        Json?
+  
+  createdAt       DateTime @default(now())
+  
+  @@index([userId])
+}
+
+model UserLevel {
+  id              String   @id @default(uuid())
+  userId          String
+  user            User     @relation("UserLevel", fields: [userId], references: [id])
+
+  level           Int      @default(1)
+  totalPoints     Int      @default(0)
+
+  achievedAt      DateTime @default(now())
+
+  @@index([userId])
+}

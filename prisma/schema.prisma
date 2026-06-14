@@ -1,809 +1,483 @@
 generator client {
-  provider        = "prisma-client-js"
-  previewFeatures = ["postgresqlExtensions"]
+  provider = "prisma-client-js"
 }
 
 datasource db {
-  provider          = "postgresql"
-  url               = env("DATABASE_URL")
-  shadowDatabaseUrl = env("SHADOW_DATABASE_URL")
-  extensions        = [postgis]
-}
-
-model Territory {
-  id                  String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  code                String                   @unique
-  name                String
-  level               TerritoryLevelEnum       @default(ZONE)
-  regions             String[]                 @default([])
-  communes            String[]                 @default([])
-  villes              String[]                 @default([])
-  quartiers           String[]                 @default([])
-  codesPostaux        String[]                 @default([]) @map("codes_postaux")
-  lat                 Decimal?                 @db.Decimal(9, 6)
-  lng                 Decimal?                 @db.Decimal(9, 6)
-  geom                Unsupported("geometry")?
-  population          Int?
-  superficie          Float?
-  densitePopulation   Float?                   @map("densite_population")
-  potentielCommercial PotentielCommercialEnum? @map("potentiel_commercial")
-  categorieMarche     CategorieMarche?         @map("categorie_marche")
-  typeZone            TypeZone?                @map("type_zone")
-  nombrePDVEstime     Int?                     @map("nombre_pdv_estime")
-  tauxPenetration     Decimal?                 @map("taux_penetration") @db.Decimal(5, 2)
-  parentId            String?                  @map("parent_id") @db.Uuid
-  adminId             String?                  @map("admin_id") @db.Uuid
-  isActive            Boolean                  @default(true) @map("is_active")
-  createdBy           String?                  @map("created_by") @db.Uuid
-  notes               String?
-  createdAt           DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt           DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(6)
-  outletsSector       Outlet[]                 @relation("OutletSector")
-  outletsTerritory    Outlet[]                 @relation("OutletTerritory")
-  routePlans          RoutePlan[]              @relation("RoutePlanSector")
-  admin               User?                    @relation("TerritoryAdmin", fields: [adminId], references: [id])
-  parent              Territory?               @relation("TerritoryHierarchy", fields: [parentId], references: [id])
-  children            Territory[]              @relation("TerritoryHierarchy")
-  assignedUsers       User[]                   @relation("UserAssignedSector")
-  users               User[]                   @relation("UserTerritory")
-
-  @@index([parentId])
-  @@index([adminId])
-  @@index([level])
-  @@map("territory")
+  provider = "sqlite"
+  url      = "file:./dev.db"
 }
 
 model User {
-  id                     String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  email                  String                  @unique
-  firstName              String                  @map("first_name")
-  lastName               String                  @map("last_name")
-  role                   RoleEnum
-  status                 UserStatusEnum          @default(ACTIVE)
-  territoryId            String?                 @map("territory_id") @db.Uuid
-  assignedSectorId       String?                 @map("assigned_sector_id") @db.Uuid
-  passwordHash           String                  @map("password_hash")
-  lastLogin              DateTime?               @map("last_login") @db.Timestamptz(6)
-  phone                  String?
-  matricule              String?                 @map("matricule")
-  hireDate               DateTime?               @map("hire_date") @db.Date
-  managerId              String?                 @map("manager_id") @db.Uuid
-  photoUrl               String?                 @map("photo_url")
-  lockedUntil            DateTime?               @map("locked_until") @db.Timestamptz(6)
-  resetToken             String?                 @map("reset_token")
-  resetTokenExpiry       DateTime?               @map("reset_token_expiry") @db.Timestamptz(6)
-  twoFactorSecret        String?                 @map("two_factor_secret")
-  twoFactorEnabled       Boolean                 @default(false) @map("two_factor_enabled")
-  emailVerified          Boolean                 @default(false) @map("email_verified")
-  emailVerificationToken String?                 @map("email_verification_token")
-  createdAt              DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt              DateTime                @updatedAt @map("updated_at") @db.Timestamptz(6)
-  auditLogs              AuditLog[]
-  loginAttempts          LoginAttempt[]
-  orders                 Order[]
-  proposedOutlets        Outlet[]                @relation("OutletProposer")
-  validatedOutlets       Outlet[]                @relation("OutletValidator")
-  refreshTokens          RefreshToken[]
-  routePlans             RoutePlan[]
-  sellerSKUGroupMappings SellerSKUGroupMapping[]
-  stockHistory           StockHistory[]
-  createdTasks           Task[]                  @relation("TaskCreator")
-  assignedTasks          Task[]                  @relation("TaskAssignee")
-  adminTerritories       Territory[]             @relation("TerritoryAdmin")
-  assignedSector         Territory?              @relation("UserAssignedSector", fields: [assignedSectorId], references: [id])
-  manager                User?                   @relation("UserManager", fields: [managerId], references: [id])
-  subordinates           User[]                  @relation("UserManager")
-  territory              Territory?              @relation("UserTerritory", fields: [territoryId], references: [id])
-  vendorStocks           VendorStock[]
-  visits                 Visit[]
+  id                  String           @id @default(uuid())
+  email               String           @unique
+  password            String
+  firstName           String
+  lastName            String
+  role                String           @default("REP")
+  phone               String
+  matricule           String           @unique
+  photoUrl            String?
+  hireDate            DateTime?
+  adminId             String?
+  territoryId         String?
+  assignedSectorId    String?
+  managerId           String?
+  isActive            Boolean          @default(true)
+  status              String           @default("ACTIVE")
+  twoFactorEnabled    Boolean          @default(false)
+  twoFactorSecret     String?
+  lastLogin           DateTime?
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+  enrollments         Enrollment[]
+  merchandisingChecks MerchCheck[]
+  orders              Order[]
+  validatedOutlets    Outlet[]         @relation("OutletValidator")
+  proposedOutlets     Outlet[]         @relation("OutletProposer")
+  refreshTokens       RefreshToken[]
+  manager             User?            @relation("VendorManager", fields: [managerId], references: [id])
+  vendors             User[]           @relation("VendorManager")
+  userAssessments     UserAssessment[] @relation("UserAssessments")
+  userLevel           UserLevel[]      @relation("UserLevel")
+  userPoints          UserPoints[]
+  vendorStockItems    VendorStock[]
+  visits              Visit[]
 
+  @@index([email])
+  @@index([role])
   @@index([territoryId])
   @@index([assignedSectorId])
   @@index([managerId])
-  @@index([email])
-  @@index([role, status])
-  @@index([role])
-  @@map("user")
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@index([userId])
+}
+
+model Territory {
+  id                  String      @id @default(uuid())
+  code                String      @unique
+  name                String
+  level               String      @default("SECTEUR")
+  parentId            String?
+  adminId             String?
+  lat                 Float?
+  lng                 Float?
+  regions             String?
+  communes            String?
+  villes              String?
+  quartiers           String?
+  codesPostaux        String?
+  population          Int?
+  superficie          Float?
+  densitePopulation   Float?
+  potentielCommercial String?
+  categorieMarche     String?
+  typeZone            String?
+  nombrePDVEstime     Int?
+  tauxPenetration     Float?
+  notes               String?
+  isActive            Boolean     @default(true)
+  createdBy           String?
+  createdAt           DateTime    @default(now())
+  updatedAt           DateTime    @updatedAt
+  outlets             Outlet[]
+  parent              Territory?  @relation("TerritoryHierarchy", fields: [parentId], references: [id])
+  children            Territory[] @relation("TerritoryHierarchy")
+
+  @@index([code])
+  @@index([level])
+  @@index([parentId])
 }
 
 model Outlet {
-  id                String                    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  code              String                    @unique
+  id                String    @id @default(uuid())
+  code              String    @unique
   name              String
   channel           String
   segment           String?
   address           String?
-  lat               Decimal?                  @db.Decimal(9, 6)
-  lng               Decimal?                  @db.Decimal(9, 6)
-  geom              Unsupported("geography")?
-  openHours         Json?                     @map("open_hours")
-  territoryId       String                    @map("territory_id") @db.Uuid
-  sectorId          String?                   @map("sector_id") @db.Uuid
-  region            String?
-  commune           String?
-  ville             String?
-  quartier          String?
-  codePostal        String?                   @map("code_postal")
-  status            OutletStatusEnum          @default(PENDING)
-  proposedBy        String?                   @map("proposed_by") @db.Uuid
-  validatedBy       String?                   @map("validated_by") @db.Uuid
-  validatedAt       DateTime?                 @map("validated_at") @db.Timestamptz(6)
-  validationComment String?                   @map("validation_comment")
-  osmPlaceId        String?                   @map("osm_place_id")
-  osmMetadata       Json?                     @map("osm_metadata")
-  createdAt         DateTime                  @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt         DateTime                  @updatedAt @map("updated_at") @db.Timestamptz(6)
-  inventories       Inventory[]
+  lat               Float?
+  lng               Float
+  openHours         String?
+  territoryId       String
+  sectorId          String?
+  status            String    @default("PENDING")
+  proposedBy        String?
+  validatedBy       String?
+  validatedAt       DateTime?
+  validationComment String?
+  osmPlaceId        String?
+  osmMetadata       String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
   orders            Order[]
-  proposer          User?                     @relation("OutletProposer", fields: [proposedBy], references: [id])
-  sector            Territory?                @relation("OutletSector", fields: [sectorId], references: [id])
-  territory         Territory                 @relation("OutletTerritory", fields: [territoryId], references: [id])
-  validator         User?                     @relation("OutletValidator", fields: [validatedBy], references: [id])
-  routeStops        RouteStop[]
-  tasks             Task[]
+  validator         User?     @relation("OutletValidator", fields: [validatedBy], references: [id])
+  proposer          User?     @relation("OutletProposer", fields: [proposedBy], references: [id])
+  territory         Territory @relation(fields: [territoryId], references: [id])
   visits            Visit[]
 
+  @@index([code])
   @@index([territoryId])
   @@index([sectorId])
-  @@index([channel])
-  @@index([segment])
   @@index([status])
-  @@index([region])
-  @@index([commune])
-  @@index([quartier])
-  @@map("outlet")
-}
-
-model RoutePlan {
-  id                     String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  userId                 String                  @map("user_id") @db.Uuid
-  sectorId               String?                 @map("sector_id") @db.Uuid
-  date                   DateTime                @db.Date
-  status                 RouteStatusEnum         @default(PLANNED)
-  isOffRoute             Boolean                 @default(false) @map("is_off_route")
-  constraints            Json?
-  createdAt              DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt              DateTime                @updatedAt @map("updated_at") @db.Timestamptz(6)
-  sector                 Territory?              @relation("RoutePlanSector", fields: [sectorId], references: [id])
-  user                   User                    @relation(fields: [userId], references: [id])
-  routeStops             RouteStop[]
-  sellerSKUGroupMappings SellerSKUGroupMapping[]
-
-  @@index([userId])
-  @@index([sectorId])
-  @@index([date])
-  @@map("route_plan")
-}
-
-model RouteStop {
-  id              String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  routePlanId     String              @map("route_plan_id") @db.Uuid
-  outletId        String              @map("outlet_id") @db.Uuid
-  seq             Int
-  eta             DateTime?           @db.Timestamptz(6)
-  durationPlanned Int?                @map("duration_planned")
-  status          RouteStopStatusEnum @default(PLANNED)
-  reason          String?
-  createdAt       DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt       DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
-  outlet          Outlet              @relation(fields: [outletId], references: [id])
-  routePlan       RoutePlan           @relation(fields: [routePlanId], references: [id], onDelete: Cascade)
-
-  @@index([routePlanId])
-  @@index([outletId])
-  @@index([seq])
-  @@map("route_stop")
-}
-
-model Visit {
-  id          String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  outletId    String       @map("outlet_id") @db.Uuid
-  userId      String       @map("user_id") @db.Uuid
-  checkinAt   DateTime     @map("checkin_at") @db.Timestamptz(6)
-  checkinLat  Decimal?     @map("checkin_lat") @db.Decimal(9, 6)
-  checkinLng  Decimal?     @map("checkin_lng") @db.Decimal(9, 6)
-  checkoutAt  DateTime?    @map("checkout_at") @db.Timestamptz(6)
-  checkoutLat Decimal?     @map("checkout_lat") @db.Decimal(9, 6)
-  checkoutLng Decimal?     @map("checkout_lng") @db.Decimal(9, 6)
-  durationMin Int?         @map("duration_min")
-  notes       String?
-  score       Int?
-  createdAt   DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt   DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
-  merchChecks MerchCheck[]
-  orders      Order[]
-  outlet      Outlet       @relation(fields: [outletId], references: [id])
-  user        User         @relation(fields: [userId], references: [id])
-
-  @@index([outletId])
-  @@index([userId])
-  @@index([checkinAt])
-  @@map("visit")
-}
-
-model MerchCheck {
-  id          String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  visitId     String           @map("visit_id") @db.Uuid
-  checklist   Json?
-  planogram   Json?
-  score       Int?
-  notes       String?
-  createdAt   DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt   DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
-  visit       Visit            @relation(fields: [visitId], references: [id], onDelete: Cascade)
-  merchPhotos MerchPhoto[]
-  merchItems  MerchCheckItem[]
-
-  @@index([visitId])
-  @@map("merch_check")
-}
-
-// Element de merchandising par produit avec questions booleennes
-model MerchCheckItem {
-  id             String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  merchCheckId   String     @map("merch_check_id") @db.Uuid
-  skuId          String     @map("sku_id") @db.Uuid
-  isVisible      Boolean    @default(false) @map("is_visible")
-  isPriceCorrect Boolean    @default(false) @map("is_price_correct")
-  isWellStocked  Boolean    @default(false) @map("is_well_stocked")
-  comment        String?
-  createdAt      DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt      DateTime   @updatedAt @map("updated_at") @db.Timestamptz(6)
-  merchCheck     MerchCheck @relation(fields: [merchCheckId], references: [id], onDelete: Cascade)
-  sku            SKU        @relation(fields: [skuId], references: [id], onDelete: Cascade)
-
-  @@unique([merchCheckId, skuId])
-  @@index([merchCheckId])
-  @@index([skuId])
-  @@map("merch_check_item")
-}
-
-model MerchPhoto {
-  id           String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  merchCheckId String     @map("merch_check_id") @db.Uuid
-  fileKey      String     @map("file_key")
-  takenAt      DateTime   @map("taken_at") @db.Timestamptz(6)
-  lat          Decimal?   @db.Decimal(9, 6)
-  lng          Decimal?   @db.Decimal(9, 6)
-  meta         Json?
-  createdAt    DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt    DateTime   @updatedAt @map("updated_at") @db.Timestamptz(6)
-  merchCheck   MerchCheck @relation(fields: [merchCheckId], references: [id], onDelete: Cascade)
-
-  @@index([merchCheckId])
-  @@map("merch_photo")
-}
-
-model Task {
-  id          String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  assignedTo  String         @map("assigned_to") @db.Uuid
-  assignedBy  String         @map("assigned_by") @db.Uuid
-  outletId    String?        @map("outlet_id") @db.Uuid
-  type        String
-  title       String
-  description String?
-  status      TaskStatusEnum @default(PENDING)
-  formData    Json?          @map("form_data")
-  dueDate     DateTime?      @map("due_date") @db.Timestamptz(6)
-  completedAt DateTime?      @map("completed_at") @db.Timestamptz(6)
-  createdAt   DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt   DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
-  assigner    User           @relation("TaskCreator", fields: [assignedBy], references: [id])
-  assignee    User           @relation("TaskAssignee", fields: [assignedTo], references: [id])
-  outlet      Outlet?        @relation(fields: [outletId], references: [id])
-
-  @@index([assignedTo])
-  @@index([assignedBy])
-  @@index([outletId])
-  @@index([status])
-  @@map("task")
+  @@index([proposedBy])
 }
 
 model ProductCategory {
-  id            String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  code          String               @unique @db.VarChar(20)
-  name          String               @db.VarChar(100)
-  displayName   String?              @map("display_name") @db.VarChar(100)
-  description   String?
-  sortOrder     Int                  @default(0) @map("sort_order")
+  id            String               @id @default(uuid())
+  name          String               @unique
+  displayName   String?
   active        Boolean              @default(true)
-  createdAt     DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt     DateTime             @updatedAt @map("updated_at") @db.Timestamptz(6)
-  subCategories ProductSubCategory[]
-  promotions    Promotion[]
-
-  @@index([active])
-  @@index([code])
-  @@map("product_categories")
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+  subcategories ProductSubCategory[]
 }
 
 model ProductSubCategory {
-  id          String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  code        String          @unique @db.VarChar(20)
-  name        String          @db.VarChar(100)
-  displayName String?         @map("display_name") @db.VarChar(100)
-  categoryId  String          @map("category_id") @db.Uuid
-  sortOrder   Int             @default(0) @map("sort_order")
-  active      Boolean         @default(true)
-  createdAt   DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt   DateTime        @updatedAt @map("updated_at") @db.Timestamptz(6)
+  id          String          @id @default(uuid())
+  name        String
+  displayName String?
+  categoryId  String
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
   brands      ProductBrand[]
-  category    ProductCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  category    ProductCategory @relation(fields: [categoryId], references: [id])
 
+  @@unique([categoryId, name])
   @@index([categoryId])
-  @@index([active])
-  @@map("product_sub_categories")
 }
 
 model ProductBrand {
-  id            String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  code          String              @unique @db.VarChar(20)
-  name          String              @db.VarChar(100)
-  displayName   String?             @map("display_name") @db.VarChar(100)
-  subCategoryId String              @map("sub_category_id") @db.Uuid
-  sortOrder     Int                 @default(0) @map("sort_order")
-  active        Boolean             @default(true)
-  createdAt     DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt     DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
-  subCategory   ProductSubCategory  @relation(fields: [subCategoryId], references: [id], onDelete: Cascade)
-  packFormats   ProductPackFormat[]
-  subBrands     ProductSubBrand[]
-  promotions    Promotion[]
+  id                   String              @id @default(uuid())
+  name                 String
+  displayName          String?
+  subProductCategoryId String
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+  subProductCategory   ProductSubCategory  @relation(fields: [subProductCategoryId], references: [id])
+  packFormats          ProductPackFormat[]
 
-  @@index([subCategoryId])
-  @@index([active])
-  @@map("product_brands")
-}
-
-model ProductSubBrand {
-  id          String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  code        String       @unique @db.VarChar(20)
-  name        String       @db.VarChar(100)
-  displayName String?      @map("display_name") @db.VarChar(100)
-  brandId     String       @map("brand_id") @db.Uuid
-  sortOrder   Int          @default(0) @map("sort_order")
-  active      Boolean      @default(true)
-  createdAt   DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt   DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
-  brand       ProductBrand @relation(fields: [brandId], references: [id], onDelete: Cascade)
-  promotions  Promotion[]
-
-  @@index([brandId])
-  @@index([active])
-  @@map("product_sub_brands")
+  @@unique([subProductCategoryId, name])
+  @@index([subProductCategoryId])
 }
 
 model ProductPackFormat {
-  id          String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  code        String            @unique @db.VarChar(20)
-  name        String            @db.VarChar(100)
-  displayName String?           @map("display_name") @db.VarChar(100)
-  sortOrder   Int               @default(0) @map("sort_order")
-  active      Boolean           @default(true)
-  createdAt   DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt   DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
-  brandId     String            @map("brand_id") @db.Uuid
-  brand       ProductBrand      @relation(fields: [brandId], references: [id], onDelete: Cascade)
-  packSizes   ProductPackSize[]
-  promotions  Promotion[]
+  id          String       @id @default(uuid())
+  name        String
+  displayName String?
+  brandId     String
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  brand       ProductBrand @relation(fields: [brandId], references: [id])
+  packSizes   SKU[]
 
+  @@unique([brandId, name])
   @@index([brandId])
-  @@index([active])
-  @@map("product_pack_formats")
-}
-
-model ProductPackSize {
-  id           String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  code         String            @unique @db.VarChar(20)
-  name         String            @db.VarChar(100)
-  displayName  String?           @map("display_name") @db.VarChar(100)
-  packFormatId String            @map("pack_format_id") @db.Uuid
-  sortOrder    Int               @default(0) @map("sort_order")
-  active       Boolean           @default(true)
-  createdAt    DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt    DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
-  packFormat   ProductPackFormat @relation(fields: [packFormatId], references: [id], onDelete: Cascade)
-  skus         SKU[]
-
-  @@index([packFormatId])
-  @@index([active])
-  @@map("product_pack_sizes")
 }
 
 model SKU {
-  id               String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  code             String            @unique @db.VarChar(50)
-  ean              String?           @unique @db.VarChar(13)
-  fullDescription  String            @map("full_description") @db.VarChar(255)
-  shortDescription String            @map("short_description") @db.VarChar(100)
-  packSizeId       String            @map("pack_size_id") @db.Uuid
-  barCode          String?           @map("bar_code") @db.VarChar(50)
-  baseUom          String            @default("Piece") @map("base_uom") @db.VarChar(20)
-  defaultUom       String            @default("Piece") @map("default_uom") @db.VarChar(20)
-  priceHt          Decimal           @map("price_ht") @db.Decimal(12, 2)
-  vatRate          Decimal           @map("vat_rate") @db.Decimal(4, 2)
-  priceTtc         Decimal           @map("price_ttc") @db.Decimal(12, 2)
+  id               String            @id @default(uuid())
+  name             String
+  displayName      String?
+  ean              String            @unique
+  code             String?
+  packFormatId     String
+  description      String?
+  shortDescription String?
+  fullDescription  String?
   photo            String?
-  weight           Decimal?          @db.Decimal(10, 3)
-  volume           Decimal?          @db.Decimal(10, 3)
-  isSaleable       Boolean           @default(true) @map("is_saleable")
+  priceHt          Float
+  vatRate          Float             @default(19.6)
   active           Boolean           @default(true)
-  createdAt        DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt        DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
-  inventories      Inventory[]
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
   merchCheckItems  MerchCheckItem[]
   orderLines       OrderLine[]
-  promotionSKUs    PromotionSKU[]
-  packSize         ProductPackSize   @relation(fields: [packSizeId], references: [id])
-  skuGroupMappings SKUGroupMapping[]
-  stockHistory     StockHistory[]
-  vendorStocks     VendorStock[]
+  packFormat       ProductPackFormat @relation(fields: [packFormatId], references: [id])
+  stockItems       VendorStock[]
 
-  @@index([packSizeId])
-  @@index([active])
-  @@index([isSaleable])
+  @@index([ean])
   @@index([code])
-  @@map("sku")
+  @@index([packFormatId])
+  @@index([active])
 }
 
-model Inventory {
-  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  outletId       String   @map("outlet_id") @db.Uuid
-  skuId          String   @map("sku_id") @db.Uuid
-  stock          Int      @default(0)
-  alertThreshold Int      @default(0) @map("alert_threshold")
-  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
-  outlet         Outlet   @relation(fields: [outletId], references: [id], onDelete: Cascade)
-  sku            SKU      @relation(fields: [skuId], references: [id], onDelete: Cascade)
+model Order {
+  id             String         @id @default(uuid())
+  orderNumber    String         @unique
+  outletId       String
+  userId         String
+  visitId        String?
+  status         String         @default("PENDING")
+  totalHt        Float
+  totalTtc       Float
+  vatRate        Float          @default(19.6)
+  currency       String?        @default("XOF")
+  taxTotal       Float?         @default(0)
+  discountTotal  Float?         @default(0)
+  paymentMethod  String?
+  paymentStatus  String         @default("PENDING")
+  notes          String?
+  orderDate      DateTime       @default(now())
+  deliveryDate   DateTime?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  visit          Visit?         @relation(fields: [visitId], references: [id])
+  user           User           @relation(fields: [userId], references: [id])
+  outlet         Outlet         @relation(fields: [outletId], references: [id])
+  items          OrderLine[]
+  stockMovements StockHistory[]
 
-  @@unique([outletId, skuId])
-  @@map("inventory")
+  @@index([orderNumber])
+  @@index([outletId])
+  @@index([userId])
+  @@index([status])
+  @@index([orderDate])
+}
+
+model OrderLine {
+  id            String   @id @default(uuid())
+  orderId       String
+  skuId         String
+  quantity      Int
+  unitPriceHt   Float
+  totalPriceHt  Float
+  totalPriceTtc Float
+  createdAt     DateTime @default(now())
+  sku           SKU      @relation(fields: [skuId], references: [id])
+  order         Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+  @@index([skuId])
+}
+
+model Visit {
+  id          String       @id @default(uuid())
+  outletId    String
+  userId      String
+  status      String       @default("PLANNED")
+  checkinAt   DateTime?
+  checkinLat  Float?
+  checkinLng  Float?
+  checkoutAt  DateTime?
+  checkoutLat Float?
+  checkoutLng Float?
+  durationMin Int?
+  score       Int?
+  notes       String?
+  plannedDate DateTime?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  merchChecks MerchCheck[]
+  orders      Order[]
+  user        User         @relation(fields: [userId], references: [id])
+  outlet      Outlet       @relation(fields: [outletId], references: [id])
+
+  @@index([outletId])
+  @@index([userId])
+  @@index([status])
+  @@index([plannedDate])
+}
+
+model MerchCheck {
+  id          String           @id @default(uuid())
+  visitId     String
+  userId      String
+  score       Int?
+  notes       String?
+  merchPhotos Int?             @default(0)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  user        User             @relation(fields: [userId], references: [id])
+  visit       Visit            @relation(fields: [visitId], references: [id], onDelete: Cascade)
+  items       MerchCheckItem[]
+  photos      MerchPhoto[]
+
+  @@index([visitId])
+  @@index([userId])
+}
+
+model MerchCheckItem {
+  id                   String     @id @default(uuid())
+  merchCheckId         String
+  merchandisingCheckId String?
+  skuId                String
+  isVisible            Boolean    @default(false)
+  isPriceCorrect       Boolean    @default(false)
+  isWellStocked        Boolean    @default(false)
+  comment              String?
+  createdAt            DateTime   @default(now())
+  sku                  SKU        @relation(fields: [skuId], references: [id])
+  merchCheck           MerchCheck @relation(fields: [merchCheckId], references: [id], onDelete: Cascade)
+
+  @@index([merchCheckId])
+  @@index([skuId])
+  @@index([merchandisingCheckId])
+}
+
+model MerchPhoto {
+  id                   String     @id @default(uuid())
+  merchCheckId         String
+  merchandisingCheckId String?
+  fileKey              String
+  imageUrl             String?
+  lat                  Float?
+  lng                  Float?
+  takenAt              DateTime   @default(now())
+  metadata             String?
+  createdAt            DateTime   @default(now())
+  merchCheck           MerchCheck @relation(fields: [merchCheckId], references: [id], onDelete: Cascade)
+
+  @@index([merchCheckId])
+  @@index([merchandisingCheckId])
 }
 
 model VendorStock {
-  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  userId         String   @map("user_id") @db.Uuid
-  skuId          String   @map("sku_id") @db.Uuid
-  quantity       Int      @default(0)
-  alertThreshold Int?     @map("alert_threshold")
-  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
-  sku            SKU      @relation(fields: [skuId], references: [id], onDelete: Cascade)
-  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id             String         @id @default(uuid())
+  userId         String
+  skuId          String
+  quantity       Int            @default(0)
+  alertThreshold Int            @default(10)
+  updatedAt      DateTime       @updatedAt
+  createdAt      DateTime       @default(now())
+  movements      StockHistory[]
+  sku            SKU            @relation(fields: [skuId], references: [id])
+  user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, skuId])
   @@index([userId])
   @@index([skuId])
-  @@map("vendor_stock")
 }
 
 model StockHistory {
-  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  userId       String   @map("user_id") @db.Uuid
-  skuId        String   @map("sku_id") @db.Uuid
-  movementType String   @map("movement_type")
+  id           String      @id @default(uuid())
+  stockItemId  String
+  movementType String
   quantity     Int
-  beforeQty    Int      @map("before_qty")
-  afterQty     Int      @map("after_qty")
-  orderId      String?  @map("order_id") @db.Uuid
+  beforeQty    Int
+  afterQty     Int
   notes        String?
-  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  order        Order?   @relation(fields: [orderId], references: [id])
-  sku          SKU      @relation(fields: [skuId], references: [id], onDelete: Cascade)
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  orderId      String?
+  createdAt    DateTime    @default(now())
+  order        Order?      @relation(fields: [orderId], references: [id])
+  stockItem    VendorStock @relation(fields: [stockItemId], references: [id], onDelete: Cascade)
+
+  @@index([stockItemId])
+  @@index([movementType])
+  @@index([createdAt])
+  @@index([orderId])
+}
+
+model Course {
+  id          String       @id @default(uuid())
+  title       String
+  description String?
+  category    String
+  contentType String       @default("document")
+  contentUrl  String
+  duration    Int?
+  targetRoles String?
+  points      Int          @default(0)
+  badge       String?
+  isPublished Boolean      @default(false)
+  publishedAt DateTime?
+  createdBy   String?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  chapters    Chapter[]
+  enrollments Enrollment[]
+
+  @@index([category])
+  @@index([isPublished])
+}
+
+model Chapter {
+  id          String   @id @default(uuid())
+  courseId    String
+  title       String
+  description String?
+  order       Int
+  contentType String
+  contentUrl  String
+  duration    Int?
+  quiz        String?
+  createdAt   DateTime @default(now())
+  course      Course   @relation(fields: [courseId], references: [id])
+
+  @@unique([courseId, order])
+  @@index([courseId])
+}
+
+model Enrollment {
+  id          String    @id @default(uuid())
+  userId      String
+  courseId    String
+  status      String
+  progress    Float     @default(0)
+  completedAt DateTime?
+  course      Course    @relation(fields: [courseId], references: [id])
+  user        User      @relation(fields: [userId], references: [id])
+
+  @@unique([userId, courseId])
+  @@index([userId])
+  @@index([courseId])
+}
+
+model Assessment {
+  id           String   @id @default(uuid())
+  courseId     String
+  title        String
+  questions    String
+  passingScore Float
+  timeLimit    Int?
+  createdAt    DateTime @default(now())
+
+  @@index([courseId])
+}
+
+model UserAssessment {
+  id           String   @id @default(uuid())
+  userId       String
+  assessmentId String
+  score        Float
+  passed       Boolean
+  answers      String
+  timeTaken    Int
+  takenAt      DateTime @default(now())
+  user         User     @relation("UserAssessments", fields: [userId], references: [id])
 
   @@index([userId])
-  @@index([skuId])
-  @@index([orderId])
-  @@index([createdAt])
-  @@map("stock_history")
+  @@index([assessmentId])
 }
 
-model SKUGroup {
-  id             String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  code           String                  @unique @db.VarChar(20)
-  description    String                  @db.VarChar(255)
-  active         Boolean                 @default(true)
-  createdAt      DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt      DateTime                @updatedAt @map("updated_at") @db.Timestamptz(6)
-  sellerMappings SellerSKUGroupMapping[]
-  skuMappings    SKUGroupMapping[]
-
-  @@index([active])
-  @@map("sku_groups")
-}
-
-model SKUGroupMapping {
-  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  skuId     String   @map("sku_id") @db.Uuid
-  groupId   String   @map("group_id") @db.Uuid
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  group     SKUGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  sku       SKU      @relation(fields: [skuId], references: [id], onDelete: Cascade)
-
-  @@unique([skuId, groupId])
-  @@index([groupId])
-  @@map("sku_group_mappings")
-}
-
-model SellerSKUGroupMapping {
-  id          String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  sellerId    String     @map("seller_id") @db.Uuid
-  routePlanId String?    @map("route_plan_id") @db.Uuid
-  groupId     String     @map("group_id") @db.Uuid
-  createdAt   DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
-  group       SKUGroup   @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  routePlan   RoutePlan? @relation(fields: [routePlanId], references: [id], onDelete: Cascade)
-  seller      User       @relation(fields: [sellerId], references: [id], onDelete: Cascade)
-
-  @@unique([sellerId, routePlanId, groupId])
-  @@index([sellerId])
-  @@index([routePlanId])
-  @@index([groupId])
-  @@map("seller_sku_group_mappings")
-}
-
-model Promotion {
-  id           String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  code         String             @unique @db.VarChar(20)
-  name         String             @db.VarChar(100)
-  description  String?
-  type         String             @db.VarChar(20)
-  value        Decimal            @db.Decimal(10, 2)
-  startDate    DateTime           @map("start_date") @db.Timestamptz(6)
-  endDate      DateTime           @map("end_date") @db.Timestamptz(6)
-  active       Boolean            @default(true)
-  applyToLevel String?            @map("apply_to_level") @db.VarChar(20)
-  categoryId   String?            @map("category_id") @db.Uuid
-  brandId      String?            @map("brand_id") @db.Uuid
-  subBrandId   String?            @map("sub_brand_id") @db.Uuid
-  packFormatId String?            @map("pack_format_id") @db.Uuid
-  minQuantity  Int?               @map("min_quantity")
-  maxDiscount  Decimal?           @map("max_discount") @db.Decimal(10, 2)
-  createdAt    DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt    DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
-  skus         PromotionSKU[]
-  brand        ProductBrand?      @relation(fields: [brandId], references: [id])
-  category     ProductCategory?   @relation(fields: [categoryId], references: [id])
-  packFormat   ProductPackFormat? @relation(fields: [packFormatId], references: [id])
-  subBrand     ProductSubBrand?   @relation(fields: [subBrandId], references: [id])
-
-  @@index([active, startDate, endDate])
-  @@index([applyToLevel])
-  @@map("promotions")
-}
-
-model PromotionSKU {
-  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  promotionId String    @map("promotion_id") @db.Uuid
-  skuId       String    @map("sku_id") @db.Uuid
-  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
-  promotion   Promotion @relation(fields: [promotionId], references: [id], onDelete: Cascade)
-  sku         SKU       @relation(fields: [skuId], references: [id], onDelete: Cascade)
-
-  @@unique([promotionId, skuId])
-  @@index([promotionId])
-  @@index([skuId])
-  @@map("promotion_skus")
-}
-
-model Order {
-  id            String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  outletId      String          @map("outlet_id") @db.Uuid
-  userId        String          @map("user_id") @db.Uuid
-  visitId       String?         @map("visit_id") @db.Uuid
-  status        OrderStatusEnum @default(DRAFT)
-  discountTotal Decimal         @default(0) @map("discount_total") @db.Decimal(12, 2)
-  taxTotal      Decimal         @default(0) @map("tax_total") @db.Decimal(12, 2)
-  totalHt       Decimal         @default(0) @map("total_ht") @db.Decimal(12, 2)
-  totalTtc      Decimal         @default(0) @map("total_ttc") @db.Decimal(12, 2)
-  currency      String          @default("XOF")
-  createdAt     DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt     DateTime        @updatedAt @map("updated_at") @db.Timestamptz(6)
-  outlet        Outlet          @relation(fields: [outletId], references: [id])
-  user          User            @relation(fields: [userId], references: [id])
-  visit         Visit?          @relation(fields: [visitId], references: [id])
-  orderLines    OrderLine[]
-  payments      Payment[]
-  stockHistory  StockHistory[]
-
-  @@index([outletId])
-  @@index([userId])
-  @@index([createdAt])
-  @@map("order")
-}
-
-model OrderLine {
-  id                String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  orderId           String   @map("order_id") @db.Uuid
-  skuId             String   @map("sku_id") @db.Uuid
-  qty               Int
-  unitPrice         Decimal  @map("unit_price") @db.Decimal(12, 2)
-  vatRate           Decimal  @map("vat_rate") @db.Decimal(4, 2)
-  lineTotalHt       Decimal  @default(0) @map("line_total_ht") @db.Decimal(12, 2)
-  lineTotalTtc      Decimal  @default(0) @map("line_total_ttc") @db.Decimal(12, 2)
-  promotionId       String?  @map("promotion_id") @db.Uuid
-  originalUnitPrice Decimal? @map("original_unit_price") @db.Decimal(12, 2)
-  discountAmount    Decimal? @map("discount_amount") @db.Decimal(12, 2)
-  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  order             Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  sku               SKU      @relation(fields: [skuId], references: [id])
-
-  @@index([orderId])
-  @@index([skuId])
-  @@map("order_line")
-}
-
-model Payment {
-  id             String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  orderId        String            @map("order_id") @db.Uuid
-  method         PaymentMethodEnum
-  amount         Decimal           @db.Decimal(12, 2)
-  paidAt         DateTime          @default(now()) @map("paid_at") @db.Timestamptz(6)
-  transactionRef String?           @map("transaction_ref")
-  meta           Json?
-  createdAt      DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
-  order          Order             @relation(fields: [orderId], references: [id], onDelete: Cascade)
-
-  @@index([orderId])
-  @@index([paidAt])
-  @@map("payment")
-}
-
-model AuditLog {
-  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  userId    String?  @map("user_id") @db.Uuid
+model UserPoints {
+  id        String   @id @default(uuid())
+  userId    String
+  points    Int
   action    String
-  entity    String
-  entityId  String?  @map("entity_id")
-  diff      Json?
-  ip        String?
-  userAgent String?  @map("user_agent")
-  at        DateTime @default(now()) @db.Timestamptz(6)
-  user      User?    @relation(fields: [userId], references: [id])
-
-  @@index([entity, entityId])
-  @@index([at])
-  @@map("audit_log")
-}
-
-model SyncQueue {
-  id        String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  entity    String
-  entityId  String     @map("entity_id")
-  op        SyncOpEnum
-  payload   Json?
-  version   BigInt     @unique @default(autoincrement())
-  createdAt DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
-
-  @@index([entity, entityId])
-  @@map("sync_queue")
-}
-
-model LoginAttempt {
-  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  userId    String?  @map("user_id") @db.Uuid
-  email     String
-  ip        String
-  userAgent String?  @map("user_agent")
-  success   Boolean  @default(false)
-  reason    String?
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  user      User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([email])
-  @@index([ip])
-  @@index([createdAt])
-  @@map("login_attempt")
-}
-
-model RefreshToken {
-  id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  userId    String    @map("user_id") @db.Uuid
-  token     String    @unique
-  expiresAt DateTime  @map("expires_at") @db.Timestamptz(6)
-  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
-  revokedAt DateTime? @map("revoked_at") @db.Timestamptz(6)
-  ip        String?
-  userAgent String?   @map("user_agent")
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  metadata  String?
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id])
 
   @@index([userId])
-  @@index([token])
-  @@index([expiresAt])
-  @@map("refresh_token")
 }
 
-/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
-model spatial_ref_sys {
-  srid      Int     @id
-  auth_name String? @db.VarChar(256)
-  auth_srid Int?
-  srtext    String? @db.VarChar(2048)
-  proj4text String? @db.VarChar(2048)
-}
+model UserLevel {
+  id          String   @id @default(uuid())
+  userId      String
+  level       Int      @default(1)
+  totalPoints Int      @default(0)
+  achievedAt  DateTime @default(now())
+  user        User     @relation("UserLevel", fields: [userId], references: [id])
 
-enum RoleEnum {
-  SUP
-  ADMIN
-  REP
-}
-
-enum UserStatusEnum {
-  ACTIVE
-  INACTIVE
-}
-
-enum OutletStatusEnum {
-  PENDING
-  APPROVED
-  REJECTED
-  INACTIVE
-}
-
-enum RouteStatusEnum {
-  PLANNED
-  IN_PROGRESS
-  DONE
-}
-
-enum RouteStopStatusEnum {
-  PLANNED
-  IN_PROGRESS
-  VISITED
-  SKIPPED
-}
-
-enum TaskStatusEnum {
-  PENDING
-  IN_PROGRESS
-  COMPLETED
-  CANCELLED
-}
-
-enum OrderStatusEnum {
-  DRAFT
-  CONFIRMED
-  DELIVERED
-  CANCELLED
-}
-
-enum PaymentMethodEnum {
-  CASH
-  MOBILE_MONEY
-  BANK_TRANSFER
-  CREDIT
-}
-
-enum SyncOpEnum {
-  INSERT
-  UPDATE
-  DELETE
-}
-
-enum TerritoryLevelEnum {
-  PAYS
-  REGION
-  ZONE
-  SECTEUR
-}
-
-enum PotentielCommercialEnum {
-  TRES_FAIBLE
-  FAIBLE
-  MOYEN
-  FORT
-  TRES_FORT
-}
-
-enum CategorieMarche {
-  URBAIN
-  RURAL
-  SEMI_URBAIN
-}
-
-enum TypeZone {
-  RESIDENTIEL
-  COMMERCIAL
-  INDUSTRIEL
-  MIXTE
+  @@index([userId])
 }

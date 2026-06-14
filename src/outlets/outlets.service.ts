@@ -1,208 +1,38 @@
-import {
-  Injectable,
-  NotFoundException,
-  BadRequestException,
-} from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { CreateOutletDto } from './dto/create-outlet.dto';
-import { UpdateOutletDto } from './dto/update-outlet.dto';
-import { OutletStatusEnum, Prisma } from '@prisma/client';
 
 @Injectable()
 export class OutletsService {
   constructor(private prisma: PrismaService) {}
 
-  /**
-   * Créer un nouveau point de vente
-   */
-  async create(createOutletDto: CreateOutletDto, userId?: string) {
-    // Générer un code unique si non fourni
-    let code = createOutletDto.code;
-    if (!code || code === 'AUTO-GEN') {
-      code = await this.generateUniqueCode();
-    }
-
-    // Vérifier que le code n'existe pas déjà
-    const existingOutlet = await this.prisma.outlet.findUnique({
-      where: { code },
-    });
-
-    if (existingOutlet) {
-      throw new BadRequestException(`Un PDV avec le code ${code} existe déjà`);
-    }
-
-    // Déterminer le territoire et le secteur du PDV
-    let territoryId = createOutletDto.territoryId;
-    let sectorId = createOutletDto.sectorId;
-
-    // Si un userId est fourni, récupérer le territoire ET le secteur assigné de l'utilisateur
-    if (userId) {
-      const user = await this.prisma.user.findUnique({
-        where: { id: userId },
-        select: {
-          territoryId: true,
-          assignedSectorId: true, // Récupérer le secteur assigné au vendeur
-        },
-      });
-      if (user) {
-        // Le PDV hérite automatiquement du territoire ET du secteur du vendeur
-        if (user.territoryId) {
-          territoryId = user.territoryId;
-        }
-
-        // HÉRITAGE AUTOMATIQUE DU SECTEUR
-        // Si le vendeur a un secteur assigné, le PDV hérite de ce secteur
-        if (user.assignedSectorId && !sectorId) {
-          sectorId = user.assignedSectorId;
-        }
-      }
-    }
-
-    // Vérifier que territoryId est défini
-    if (!territoryId) {
-      throw new BadRequestException('Le territoire est requis');
-    }
-
-    // Récupérer les informations géographiques du territoire
-    const territory = await this.prisma.territory.findUnique({
-      where: { id: territoryId },
-      select: {
-        regions: true,
-        communes: true,
-        villes: true,
-        quartiers: true,
-        codesPostaux: true,
-      },
-    });
-
-    if (!territory) {
-      throw new NotFoundException(`Territoire ${territoryId} introuvable`);
-    }
-
-    // Créer le PDV avec les informations géographiques héritées du territoire
-    const outlet = await this.prisma.outlet.create({
-      data: {
-        code,
-        name: createOutletDto.name,
-        channel: createOutletDto.channel,
-        segment: createOutletDto.segment || undefined,
-        address: createOutletDto.address || undefined,
-        lat: createOutletDto.lat || undefined,
-        lng: createOutletDto.lng || undefined,
-        openHours: createOutletDto.openHours || {},
-        status: createOutletDto.status || OutletStatusEnum.PENDING,
-        territoryId: territoryId,
-        sectorId: sectorId || undefined, // Assigner le secteur hérité
-        // Copier les informations géographiques du territoire (prendre le premier de chaque tableau)
-        region: territory.regions?.[0] || undefined,
-        commune: territory.communes?.[0] || undefined,
-        ville: territory.villes?.[0] || undefined,
-        quartier: territory.quartiers?.[0] || undefined,
-        codePostal: territory.codesPostaux?.[0] || undefined,
-
-        proposedBy: userId || createOutletDto.proposedBy || undefined,
-        validationComment: createOutletDto.validationComment || undefined,
-        osmPlaceId: createOutletDto.osmPlaceId || undefined,
-        osmMetadata: (createOutletDto.osmMetadata ||
-          {}) as Prisma.InputJsonValue,
-      },
-      include: {
-        territory: {
-          select: {
-            id: true,
-            code: true,
-            name: true,
-            level: true,
-          },
-        },
-        proposer: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            email: true,
-          },
-        },
-        validator: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            email: true,
-          },
-        },
-      },
-    });
-
-    return outlet;
-  }
-
   async findAll(filters?: {
-    status?: OutletStatusEnum;
+    status?: string;
     territoryId?: string;
-    sectorId?: string;
     channel?: string;
     proposedBy?: string;
-    region?: string;
-    commune?: string;
-    ville?: string;
-    quartier?: string;
   }) {
-    console.log('[findAll] Filtres reçus:', filters);
-
-    const where: Prisma.OutletWhereInput = {};
+    const where: any = {};
 
     if (filters?.status) {
       where.status = filters.status;
-      console.log('Filtre status appliqué:', filters.status);
     }
+
     if (filters?.territoryId) {
       where.territoryId = filters.territoryId;
-      console.log('Filtre territoryId appliqué:', filters.territoryId);
     }
-    if (filters?.sectorId) {
-      where.sectorId = filters.sectorId;
-      console.log('Filtre sectorId appliqué:', filters.sectorId);
-    }
+
     if (filters?.channel) {
       where.channel = filters.channel;
-      console.log('Filtre channel appliqué:', filters.channel);
     }
+
     if (filters?.proposedBy) {
       where.proposedBy = filters.proposedBy;
-      console.log('Filtre proposedBy appliqué:', filters.proposedBy);
-    }
-    // Filtres géographiques
-    if (filters?.region) {
-      where.region = filters.region;
-      console.log('Filtre region appliqué:', filters.region);
-    }
-    if (filters?.commune) {
-      where.commune = filters.commune;
-      console.log('Filtre commune appliqué:', filters.commune);
-    }
-    if (filters?.ville) {
-      where.ville = filters.ville;
-      console.log('Filtre ville appliqué:', filters.ville);
-    }
-    if (filters?.quartier) {
-      where.quartier = filters.quartier;
-      console.log('Filtre quartier appliqué:', filters.quartier);
     }
 
-    console.log('Clause WHERE finale:', JSON.stringify(where));
-
-    const outlets = await this.prisma.outlet.findMany({
+    return this.prisma.outlet.findMany({
       where,
       include: {
-        territory: {
-          select: {
-            id: true,
-            code: true,
-            name: true,
-            level: true,
-          },
-        },
+        territory: true,
         proposer: {
           select: {
             id: true,
@@ -220,39 +50,42 @@ export class OutletsService {
           },
         },
       },
-      orderBy: {
-        createdAt: 'desc',
-      },
+      orderBy: { createdAt: 'desc' },
     });
-
-    console.log('Nombre de PDV trouvés dans la DB:', outlets?.length || 0);
-    if (outlets?.length > 0) {
-      console.log('Premier PDV:', {
-        id: outlets[0].id,
-        name: outlets[0].name,
-        status: outlets[0].status,
-        territoryId: outlets[0].territoryId,
-      });
-    }
-
-    return outlets;
   }
 
-  /**
-   * Récupérer un point de vente par ID
-   */
-  async findOne(id: string) {
+  async getMyTerritoryOutlets(filters?: {
+    status?: string;
+    channel?: string;
+  }) {
+    // This will be called with the user from JWT
+    // For now, return all outlets
+    const where: any = {};
+
+    if (filters?.status) {
+      where.status = filters.status;
+    }
+
+    if (filters?.channel) {
+      where.channel = filters.channel;
+    }
+
+    return this.prisma.outlet.findMany({
+      where,
+      include: {
+        territory: true,
+        proposer: true,
+        validator: true,
+      },
+      orderBy: { name: 'asc' },
+    });
+  }
+
+  async findById(id: string) {
     const outlet = await this.prisma.outlet.findUnique({
       where: { id },
       include: {
-        territory: {
-          select: {
-            id: true,
-            code: true,
-            name: true,
-            level: true,
-          },
-        },
+        territory: true,
         proposer: {
           select: {
             id: true,
@@ -273,212 +106,144 @@ export class OutletsService {
     });
 
     if (!outlet) {
-      throw new NotFoundException(`Point de vente avec l'ID ${id} non trouvé`);
+      throw new NotFoundException('Outlet not found');
     }
 
     return outlet;
   }
 
-  /**
-   * Mettre à jour un point de vente
-   */
-  async update(id: string, updateOutletDto: UpdateOutletDto) {
-    // Vérifier que le PDV existe
-    await this.findOne(id);
+  async create(data: any) {
+    // Check if code exists
+    const existingCode = await this.prisma.outlet.findUnique({
+      where: { code: data.code },
+    });
 
-    // Extraire territoryId du DTO car il ne peut pas être modifié
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { territoryId, ...updateData } = updateOutletDto;
-    const outlet = await this.prisma.outlet.update({
-      where: { id },
+    if (existingCode) {
+      throw new ConflictException('Outlet code already exists');
+    }
+
+    // Set proposedBy from JWT if not provided
+    // For now, we'll use a default or provided value
+
+    return this.prisma.outlet.create({
       data: {
-        ...updateData,
-        updatedAt: new Date(),
-      } as Prisma.OutletUpdateInput,
+        ...data,
+        status: data.status || 'PENDING',
+      },
       include: {
-        territory: {
-          select: {
-            id: true,
-            code: true,
-            name: true,
-            level: true,
-          },
-        },
-        proposer: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            email: true,
-          },
-        },
-        validator: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            email: true,
-          },
-        },
+        territory: true,
+        proposer: true,
       },
     });
-
-    return outlet;
   }
 
-  /**
-   * Approuver un point de vente
-   * Seuls les admins du même territoire peuvent valider
-   */
-  async approve(id: string, validatorId?: string) {
-    // Récupérer le PDV
-    const outlet = await this.findOne(id);
-    // Si un validatorId est fourni, vérifier qu'il a le même territoire
-    if (validatorId) {
-      const validator = await this.prisma.user.findUnique({
-        where: { id: validatorId },
-        select: { territoryId: true, role: true },
+  async update(id: string, data: any) {
+    const outlet = await this.findById(id);
+
+    if (data.code && data.code !== outlet.code) {
+      const existingCode = await this.prisma.outlet.findUnique({
+        where: { code: data.code },
       });
 
-      if (!validator) {
-        throw new BadRequestException('Validateur non trouvé');
-      }
-
-      // Vérifier que le validateur est ADMIN
-      if (validator.role !== 'ADMIN') {
-        throw new BadRequestException(
-          'Seuls les admins peuvent valider les PDV',
-        );
-      }
-
-      // Vérifier que le validateur a le même territoire que le PDV
-      if (validator.territoryId !== outlet.territoryId) {
-        throw new BadRequestException(
-          'Vous ne pouvez valider que les PDV de votre territoire',
-        );
+      if (existingCode) {
+        throw new ConflictException('Outlet code already exists');
       }
     }
-    const updateData: UpdateOutletDto = {
-      status: OutletStatusEnum.APPROVED,
-      validatedAt: new Date(),
-    };
-    if (validatorId) {
-      updateData.validatedBy = validatorId;
-    }
-    return this.update(id, updateData);
+
+    return this.prisma.outlet.update({
+      where: { id },
+      data,
+      include: {
+        territory: true,
+        proposer: true,
+        validator: true,
+      },
+    });
   }
 
-  /**
-   * Rejeter un point de vente
-   * Seuls les admins du même territoire peuvent rejeter
-   */
-  async reject(id: string, reason?: string, validatorId?: string) {
-    // Récupérer le PDV
-    const outlet = await this.findOne(id);
+  async approve(id: string, userId?: string) {
+    const outlet = await this.findById(id);
 
-    // Si un validatorId est fourni, vérifier qu'il a le même territoire
-    if (validatorId) {
-      const validator = await this.prisma.user.findUnique({
-        where: { id: validatorId },
-        select: { territoryId: true, role: true },
-      });
-
-      if (!validator) {
-        throw new BadRequestException('Validateur non trouvé');
-      }
-
-      // Vérifier que le validateur est ADMIN
-      if (validator.role !== 'ADMIN') {
-        throw new BadRequestException(
-          'Seuls les admins peuvent rejeter les PDV',
-        );
-      }
-
-      // Vérifier que le validateur a le même territoire que le PDV
-      if (validator.territoryId !== outlet.territoryId) {
-        throw new BadRequestException(
-          'Vous ne pouvez rejeter que les PDV de votre territoire',
-        );
-      }
+    if (outlet.status !== 'PENDING') {
+      throw new ConflictException('Outlet can only be approved when pending');
     }
 
-    const updateData: UpdateOutletDto = {
-      status: OutletStatusEnum.REJECTED,
-      validationComment: reason,
-      validatedAt: new Date(),
-    };
-    if (validatorId) {
-      updateData.validatedBy = validatorId;
-    }
-    return this.update(id, updateData);
+    return this.prisma.outlet.update({
+      where: { id },
+      data: {
+        status: 'APPROVED',
+        validatedBy: userId,
+        validatedAt: new Date(),
+      },
+    });
   }
 
-  /**
-   * Supprimer un point de vente
-   */
-  async remove(id: string) {
-    // Vérifier que le PDV existe
-    await this.findOne(id);
+  async reject(id: string, reason?: string, userId?: string) {
+    const outlet = await this.findById(id);
 
-    await this.prisma.outlet.delete({
+    if (outlet.status !== 'PENDING') {
+      throw new ConflictException('Outlet can only be rejected when pending');
+    }
+
+    return this.prisma.outlet.update({
+      where: { id },
+      data: {
+        status: 'REJECTED',
+        validatedBy: userId,
+        validatedAt: new Date(),
+        validationComment: reason,
+      },
+    });
+  }
+
+  async delete(id: string) {
+    const outlet = await this.findById(id);
+
+    // Check if outlet has orders or visits
+    const ordersCount = await this.prisma.order.count({
+      where: { outletId: id },
+    });
+
+    const visitsCount = await this.prisma.visit.count({
+      where: { outletId: id },
+    });
+
+    if (ordersCount > 0 || visitsCount > 0) {
+      throw new ConflictException('Cannot delete outlet with associated orders or visits');
+    }
+
+    return this.prisma.outlet.delete({
       where: { id },
     });
-
-    return { message: 'Point de vente supprimé avec succès' };
   }
 
-  /**
-   * Générer un code unique pour un PDV
-   */
-  private async generateUniqueCode(): Promise<string> {
-    const prefix = 'PDV';
-    const timestamp = Date.now().toString().slice(-6);
-    const random = Math.floor(Math.random() * 1000)
-      .toString()
-      .padStart(3, '0');
-    const code = `${prefix}-${timestamp}-${random}`;
-
-    // Vérifier que le code n'existe pas déjà
-    const existing = await this.prisma.outlet.findUnique({
-      where: { code },
-    });
-
-    if (existing) {
-      // Régénérer si le code existe déjà (très rare)
-      return this.generateUniqueCode();
-    }
-
-    return code;
-  }
-
-  /**
-   * Obtenir les statistiques des PDV
-   */
-  async getStats(filters?: { territoryId?: string; proposedBy?: string }) {
-    const where: Prisma.OutletWhereInput = {};
+  async getStats(filters?: {
+    territoryId?: string;
+    proposedBy?: string;
+  }) {
+    const where: any = {};
 
     if (filters?.territoryId) {
       where.territoryId = filters.territoryId;
     }
+
     if (filters?.proposedBy) {
       where.proposedBy = filters.proposedBy;
     }
 
-    const [total, pending, approved, rejected, inactive] = await Promise.all([
-      this.prisma.outlet.count({ where }),
-      this.prisma.outlet.count({
-        where: { ...where, status: OutletStatusEnum.PENDING },
-      }),
-      this.prisma.outlet.count({
-        where: { ...where, status: OutletStatusEnum.APPROVED },
-      }),
-      this.prisma.outlet.count({
-        where: { ...where, status: OutletStatusEnum.REJECTED },
-      }),
-      this.prisma.outlet.count({
-        where: { ...where, status: OutletStatusEnum.INACTIVE },
-      }),
-    ]);
+    const total = await this.prisma.outlet.count({ where });
+    const pending = await this.prisma.outlet.count({
+      where: { ...where, status: 'PENDING' },
+    });
+    const approved = await this.prisma.outlet.count({
+      where: { ...where, status: 'APPROVED' },
+    });
+    const rejected = await this.prisma.outlet.count({
+      where: { ...where, status: 'REJECTED' },
+    });
+    const inactive = await this.prisma.outlet.count({
+      where: { ...where, status: 'INACTIVE' },
+    });
 
     return {
       total,

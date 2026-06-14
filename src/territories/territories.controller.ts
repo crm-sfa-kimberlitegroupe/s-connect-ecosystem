@@ -1,402 +1,317 @@
-import {
-  Controller,
-  Get,
-  Post,
-  Put,
-  Patch,
-  Delete,
-  Body,
-  Param,
-  Query,
-  UseGuards,
-} from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, UseGuards, Request, Query, Patch } from '@nestjs/common';
+import { AuthGuard } from '@nestjs/passport';
+import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { TerritoriesService } from './territories.service';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { RolesGuard } from '../auth/guards/roles.guard';
-import { Roles } from '../auth/decorators/roles.decorator';
-import { RoleEnum } from '@prisma/client';
-import { CreateSectorDto } from './dto/create-sector.dto';
-import { AssignOutletsToSectorDto } from './dto/assign-outlets-to-sector.dto';
-import { AssignSectorToVendorDto } from './dto/assign-sector-to-vendor.dto';
-import { AssignOutletsToVendorDto } from './dto/assign-outlets-to-vendor.dto';
-import { RemoveOutletsFromSectorDto } from './dto/remove-outlets-from-sector.dto';
-import { AssignAdminDto } from './dto/assign-admin.dto';
 
+@ApiTags('Territories')
 @Controller('territories')
-@UseGuards(JwtAuthGuard, RolesGuard)
 export class TerritoriesController {
-  constructor(private readonly territoriesService: TerritoriesService) {}
+  constructor(private territoriesService: TerritoriesService) {}
 
-  /**
-   * GET /territories
-   * Récupérer tous les territoires
-   */
   @Get()
-  async findAll() {
-    const territories = await this.territoriesService.findAll();
+  @UseGuards(AuthGuard('jwt'))
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get all territories' })
+  async findAll(@Query('level') level?: string, @Query('parentId') parentId?: string) {
+    const territories = await this.territoriesService.findAll({ level, parentId });
     return {
       success: true,
       data: territories,
-      message: 'Territoires récupérés avec succès',
+      message: 'Territories retrieved successfully',
     };
   }
 
-  /**
-   * POST /territories
-   * Créer un nouveau territoire (ZONE)
-   */
-  @Post()
-  @Roles(RoleEnum.ADMIN, RoleEnum.SUP)
-  async createTerritory(@Body() data: any) {
-    const territory = await this.territoriesService.createTerritory(data);
-    return {
-      success: true,
-      data: territory,
-      message: 'Territoire créé avec succès',
-    };
-  }
-
-  /**
-   * PUT /territories/:id
-   * Mettre à jour un territoire
-   */
-  @Put(':id')
-  @Roles(RoleEnum.ADMIN, RoleEnum.SUP)
-  async updateTerritory(@Param('id') id: string, @Body() data: any) {
-    const territory = await this.territoriesService.updateTerritory(id, data);
-    return {
-      success: true,
-      data: territory,
-      message: 'Territoire mis à jour avec succès',
-    };
-  }
-
-  /**
-   * DELETE /territories/:id
-   * Supprimer un territoire
-   */
-  @Delete(':id')
-  @Roles(RoleEnum.ADMIN, RoleEnum.SUP)
-  async deleteTerritory(@Param('id') id: string) {
-    await this.territoriesService.deleteTerritory(id);
-    return {
-      success: true,
-      data: null,
-      message: 'Territoire supprimé avec succès',
-    };
-  }
-
-  /**
-   * POST /territories/sectors
-   * Créer un nouveau secteur (ADMIN uniquement)
-   */
-  @Post('sectors')
-  @Roles(RoleEnum.ADMIN)
-  async createSector(@Body() createSectorDto: CreateSectorDto) {
-    const sector = await this.territoriesService.createSector(createSectorDto);
-    return {
-      success: true,
-      data: sector,
-      message: 'Secteur créé avec succès',
-    };
-  }
-
-  /**
-   * GET /territories/sectors
-   * Récupérer tous les secteurs avec leurs PDV et vendeurs
-   */
   @Get('sectors')
-  @Roles(RoleEnum.ADMIN, RoleEnum.SUP)
-  async findAllSectors(@Query('level') level?: string) {
+  @UseGuards(AuthGuard('jwt'))
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get all sectors' })
+  async getAllSectors(@Query('level') level?: string) {
     const sectors = await this.territoriesService.findAllSectors({ level });
     return {
       success: true,
       data: sectors,
-      message: 'Secteurs récupérés avec succès',
+      message: 'Sectors retrieved successfully',
     };
   }
 
-  /**
-   * GET /territories/sectors/:id
-   * Récupérer un secteur par ID
-   */
   @Get('sectors/:id')
-  @Roles(RoleEnum.ADMIN, RoleEnum.SUP)
-  async findSectorById(@Param('id') id: string) {
-    const sector = await this.territoriesService.findSectorById(id);
+  @UseGuards(AuthGuard('jwt'))
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get sector by ID' })
+  async getSectorById(@Param('id') id: string) {
+    const sector = await this.territoriesService.getSectorById(id);
     return {
       success: true,
       data: sector,
-      message: 'Secteur récupéré avec succès',
+      message: 'Sector retrieved successfully',
     };
   }
 
-  /**
-   * POST /territories/sectors/assign-outlets
-   * Assigner des PDV à un secteur (ADMIN uniquement)
-   */
+  @Post('sectors')
+  @UseGuards(AuthGuard('jwt'))
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Create a new sector' })
+  async createSector(@Body() data: any) {
+    const sector = await this.territoriesService.createSector(data);
+    return {
+      success: true,
+      data: sector,
+      message: 'Sector created successfully',
+    };
+  }
+
   @Post('sectors/assign-outlets')
-  @Roles(RoleEnum.ADMIN)
-  async assignOutletsToSector(@Body() dto: AssignOutletsToSectorDto) {
-    const sector = await this.territoriesService.assignOutletsToSector(dto);
+  @UseGuards(AuthGuard('jwt'))
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Assign outlets to sector' })
+  async assignOutletsToSector(@Body() data: { sectorId: string; outletIds: string[] }) {
+    const result = await this.territoriesService.assignOutletsToSector(data);
     return {
       success: true,
-      data: sector,
-      message: 'PDV assignés au secteur avec succès',
+      data: result,
+      message: 'Outlets assigned to sector successfully',
     };
   }
 
-  /**
-   * POST /territories/sectors/assign-vendor
-   * Assigner un secteur à un vendeur (ADMIN uniquement)
-   */
   @Post('sectors/assign-vendor')
-  @Roles(RoleEnum.ADMIN)
-  async assignSectorToVendor(@Body() dto: AssignSectorToVendorDto) {
-    const vendor = await this.territoriesService.assignSectorToVendor(dto);
+  @UseGuards(AuthGuard('jwt'))
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Assign sector to vendor' })
+  async assignSectorToVendor(@Body() data: { vendorId: string; sectorId: string }) {
+    const user = await this.territoriesService.assignSectorToVendor(data);
     return {
       success: true,
-      data: vendor,
-      message: 'Secteur assigné au vendeur avec succès',
+      data: user,
+      message: 'Sector assigned to vendor successfully',
     };
   }
 
-  /**
-   * GET /territories/vendors/:vendorId/outlets
-   * Récupérer les PDV d'un vendeur via son secteur
-   */
   @Get('vendors/:vendorId/outlets')
+  @UseGuards(AuthGuard('jwt'))
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get vendor outlets' })
   async getVendorOutlets(@Param('vendorId') vendorId: string) {
-    const data = await this.territoriesService.getVendorOutlets(vendorId);
-    return {
-      success: true,
-      data,
-      message: 'PDV du vendeur récupérés avec succès',
-    };
-  }
-
-  /**
-   * DELETE /territories/sectors/:id
-   * Supprimer un secteur (ADMIN uniquement)
-   */
-  @Delete('sectors/:id')
-  @Roles(RoleEnum.ADMIN)
-  async removeSector(@Param('id') id: string) {
-    const result = await this.territoriesService.removeSector(id);
+    const result = await this.territoriesService.getVendorOutlets(vendorId);
     return {
       success: true,
       data: result,
-      message: result.message,
+      message: 'Vendor outlets retrieved successfully',
     };
   }
 
-  /**
-   * POST /territories/sectors/remove-outlets
-   * Retirer des PDV d'un secteur (ADMIN uniquement)
-   */
-  @Post('sectors/remove-outlets')
-  @Roles(RoleEnum.ADMIN)
-  async removeOutletsFromSector(@Body() dto: RemoveOutletsFromSectorDto) {
-    const result = await this.territoriesService.removeOutletsFromSector(dto);
+  @Get(':id')
+  @UseGuards(AuthGuard('jwt'))
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get territory by ID' })
+  async findById(@Param('id') id: string) {
+    const territory = await this.territoriesService.findById(id);
     return {
       success: true,
-      data: result,
-      message: result.message,
+      data: territory,
+      message: 'Territory retrieved successfully',
     };
   }
 
-  /**
-   * POST /territories/vendors/assign-outlets
-   * Assigner des PDV directement à un vendeur (ADMIN uniquement)
-   */
-  @Post('vendors/assign-outlets')
-  @Roles(RoleEnum.ADMIN)
-  async assignOutletsToVendor(@Body() dto: AssignOutletsToVendorDto) {
-    const result = await this.territoriesService.assignOutletsToVendor(dto);
+  @Post()
+  @UseGuards(AuthGuard('jwt'))
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Create a new territory' })
+  async create(@Body() data: any) {
+    const territory = await this.territoriesService.create(data);
     return {
       success: true,
-      data: result,
-      message: result.message,
+      data: territory,
+      message: 'Territory created successfully',
     };
   }
 
-  /**
-   * DELETE /territories/vendors/:vendorId/sector
-   * Retirer un vendeur de son secteur (ADMIN uniquement)
-   */
-  @Delete('vendors/:vendorId/sector')
-  @Roles(RoleEnum.ADMIN)
-  async removeSectorFromVendor(@Param('vendorId') vendorId: string) {
-    const result =
-      await this.territoriesService.removeSectorFromVendor(vendorId);
+  @Put(':id')
+  @UseGuards(AuthGuard('jwt'))
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Update territory' })
+  async update(@Param('id') id: string, @Body() data: any) {
+    const territory = await this.territoriesService.update(id, data);
     return {
       success: true,
-      data: result,
-      message: result.message,
+      data: territory,
+      message: 'Territory updated successfully',
     };
   }
 
-  /**
-   * GET /territories/vendors/with-sectors
-   * Récupérer tous les vendeurs avec leurs secteurs (ADMIN/SUP uniquement)
-   */
-  @Get('vendors/with-sectors')
-  @Roles(RoleEnum.ADMIN, RoleEnum.SUP)
-  async findAllVendorsWithSectors() {
-    const vendors = await this.territoriesService.findAllVendorsWithSectors();
+  @Delete(':id')
+  @UseGuards(AuthGuard('jwt'))
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Delete territory' })
+  async delete(@Param('id') id: string) {
+    await this.territoriesService.delete(id);
     return {
       success: true,
-      data: vendors,
-      message: 'Vendeurs avec secteurs récupérés avec succès',
+      message: 'Territory deleted successfully',
     };
   }
 
-  /**
-   * GET /territories/:id/geo-info
-   * Récupérer les informations géographiques d'un territoire (tous les rôles)
-   */
-  @Get(':id/geo-info')
-  @Roles(RoleEnum.ADMIN, RoleEnum.SUP, RoleEnum.REP)
-  async getTerritoryGeoInfo(@Param('id') id: string) {
-    const geoInfo = await this.territoriesService.getTerritoryGeoInfo(id);
+  @Get('users/managers/list')
+  @UseGuards(AuthGuard('jwt'))
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get all managers' })
+  async getManagers() {
+    const managers = await this.territoriesService.getManagers();
     return {
       success: true,
-      data: geoInfo,
-      message: 'Informations géographiques récupérées avec succès',
+      data: managers,
+      message: 'Managers retrieved successfully',
     };
   }
 
-  /**
-   * GET /territories/admins/available
-   * Récupérer la liste des administrateurs disponibles (SUP uniquement)
-   */
   @Get('admins/available')
-  @Roles(RoleEnum.SUP)
-  async getAvailableAdmins(
-    @Query('excludeTerritoryId')
-    excludeTerritoryId?: string,
-  ) {
-    const admins =
-      await this.territoriesService.getAvailableAdmins(excludeTerritoryId);
+  @UseGuards(AuthGuard('jwt'))
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get available admins' })
+  async getAvailableAdmins(@Query('excludeTerritoryId') excludeTerritoryId?: string) {
+    const admins = await this.territoriesService.getAvailableAdmins(excludeTerritoryId);
     return {
       success: true,
       data: admins,
-      message: 'Administrateurs disponibles récupérés avec succès',
+      message: 'Available admins retrieved successfully',
     };
   }
 
-  /**
-   * PATCH /territories/:id/assign-admin
-   * Assigner un administrateur à un territoire (première assignation - SUP uniquement)
-   */
   @Patch(':id/assign-admin')
-  @Roles(RoleEnum.SUP)
-  async assignAdmin(
-    @Param('id') territoryId: string,
-    @Body() dto: AssignAdminDto,
-  ) {
-    const territory = await this.territoriesService.assignTerritoryAdmin(
-      territoryId,
-      dto.adminId,
-    );
+  @UseGuards(AuthGuard('jwt'))
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Assign admin to territory' })
+  async assignAdmin(@Param('id') territoryId: string, @Body('adminId') adminId: string) {
+    const territory = await this.territoriesService.assignAdmin(territoryId, adminId);
     return {
       success: true,
       data: territory,
-      message: 'Administrateur assigné au territoire avec succès',
+      message: 'Admin assigned successfully',
     };
   }
 
-  /**
-   * PATCH /territories/:id/reassign-admin
-   * Réassigner un administrateur à un territoire (changement - SUP uniquement)
-   * Met à jour atomiquement le territoire et tous les vendeurs associés
-   */
   @Patch(':id/reassign-admin')
-  @Roles(RoleEnum.SUP)
-  async reassignAdmin(
-    @Param('id') territoryId: string,
-    @Body() dto: AssignAdminDto,
-  ) {
-    const territory = await this.territoriesService.reassignTerritoryAdmin(
-      territoryId,
-      dto.adminId,
-    );
+  @UseGuards(AuthGuard('jwt'))
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Reassign admin to territory' })
+  async reassignAdmin(@Param('id') territoryId: string, @Body('adminId') adminId: string) {
+    const territory = await this.territoriesService.reassignAdmin(territoryId, adminId);
     return {
       success: true,
       data: territory,
-      message:
-        'Administrateur réassigné avec succès. Les vendeurs ont été mis à jour.',
+      message: 'Admin reassigned successfully',
     };
   }
 
-  /**
-   * DELETE /territories/:id/remove-admin
-   * Retirer l'administrateur d'un territoire (SUP uniquement)
-   */
   @Delete(':id/remove-admin')
-  @Roles(RoleEnum.SUP)
+  @UseGuards(AuthGuard('jwt'))
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Remove admin from territory' })
   async removeAdmin(@Param('id') territoryId: string) {
-    const territory =
-      await this.territoriesService.removeTerritoryAdmin(territoryId);
+    const territory = await this.territoriesService.removeAdmin(territoryId);
     return {
       success: true,
       data: territory,
-      message: 'Administrateur retiré du territoire avec succès',
+      message: 'Admin removed successfully',
     };
   }
 
-  /**
-   * PATCH /territories/sectors/:id/reassign-vendor
-   * Réassigner un vendeur à un secteur (changement - ADMIN uniquement)
-   */
   @Patch('sectors/:id/reassign-vendor')
-  @Roles(RoleEnum.ADMIN)
-  async reassignSectorVendor(
-    @Param('id') sectorId: string,
-    @Body() dto: { vendorId: string },
-  ) {
-    const sector = await this.territoriesService.reassignSectorVendor(
-      sectorId,
-      dto.vendorId,
-    );
-    return {
-      success: true,
-      data: sector,
-      message: 'Vendeur réassigné au secteur avec succès',
-    };
-  }
-
-  /**
-   * DELETE /territories/sectors/:id/unassign-vendor
-   * Désassigner un vendeur d'un secteur (ADMIN uniquement)
-   */
-  @Delete('sectors/:id/unassign-vendor')
-  @Roles('ADMIN', 'SUP')
-  async unassignSectorVendor(@Param('id') sectorId: string) {
-    return this.territoriesService.unassignSectorVendor(sectorId);
-  }
-
-  /**
-   * GET /territories/vendors/:vendorId/assigned-sector
-   * Récupérer le secteur assigné à un vendeur (ADMIN, SUP, REP uniquement)
-   */
-  @Get('vendors/:vendorId/assigned-sector')
-  @Roles('ADMIN', 'SUP', 'REP')
-  async getVendorAssignedSector(@Param('vendorId') vendorId: string) {
-    return this.territoriesService.getVendorAssignedSector(vendorId);
-  }
-
-  /**
-   * GET /territories/:id
-   * Récupérer un territoire par son ID
-   */
-  @Get(':id')
-  async findOne(@Param('id') id: string) {
-    const territory = await this.territoriesService.findOne(id);
+  @UseGuards(AuthGuard('jwt'))
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Reassign vendor to sector' })
+  async reassignSectorVendor(@Param('id') sectorId: string, @Body('vendorId') vendorId: string) {
+    const territory = await this.territoriesService.reassignSectorVendor(sectorId, vendorId);
     return {
       success: true,
       data: territory,
-      message: 'Territoire récupéré avec succès',
+      message: 'Vendor reassigned successfully',
     };
+  }
+
+  @Delete('sectors/:id/unassign-vendor')
+  @UseGuards(AuthGuard('jwt'))
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Unassign vendor from sector' })
+  async unassignSectorVendor(@Param('id') sectorId: string) {
+    const territory = await this.territoriesService.unassignSectorVendor(sectorId);
+    return {
+      success: true,
+      data: territory,
+      message: 'Vendor unassigned successfully',
+    };
+  }
+
+  @Get('vendors/with-sectors')
+  @UseGuards(AuthGuard('jwt'))
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get all vendors with sectors' })
+  async getAllVendorsWithSectors() {
+    const vendors = await this.territoriesService.getAllVendorsWithSectors();
+    return {
+      success: true,
+      data: vendors,
+      message: 'Vendors with sectors retrieved successfully',
+    };
+  }
+
+  @Get(':id/geo-info')
+  @UseGuards(AuthGuard('jwt'))
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get territory geographic info' })
+  async getTerritoryGeoInfo(@Param('id') territoryId: string) {
+    const geoInfo = await this.territoriesService.getTerritoryGeoInfo(territoryId);
+    return {
+      success: true,
+      data: geoInfo,
+      message: 'Geographic info retrieved successfully',
+    };
+  }
+
+  @Post('sectors/remove-outlets')
+  @UseGuards(AuthGuard('jwt'))
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Remove outlets from sector' })
+  async removeOutletsFromSector(@Body() data: { sectorId: string; outletIds: string[] }) {
+    const result = await this.territoriesService.removeOutletsFromSector(data);
+    return {
+      success: true,
+      data: result,
+      message: 'Outlets removed successfully',
+    };
+  }
+
+  @Post('vendors/assign-outlets')
+  @UseGuards(AuthGuard('jwt'))
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Assign outlets to vendor' })
+  async assignOutletsToVendor(@Body() data: { vendorId: string; outletIds: string[] }) {
+    const result = await this.territoriesService.assignOutletsToVendor(data);
+    return {
+      success: true,
+      data: result,
+      message: 'Outlets assigned to vendor successfully',
+    };
+  }
+
+  @Delete('vendors/:vendorId/sector')
+  @UseGuards(AuthGuard('jwt'))
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Remove sector from vendor' })
+  async removeSectorFromVendor(@Param('vendorId') vendorId: string) {
+    const result = await this.territoriesService.removeSectorFromVendor(vendorId);
+    return {
+      success: true,
+      data: result,
+      message: 'Sector removed from vendor successfully',
+    };
+  }
+
+  @Get('vendors/:vendorId/assigned-sector')
+  @UseGuards(AuthGuard('jwt'))
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get vendor assigned sector' })
+  async getVendorAssignedSector(@Param('vendorId') vendorId: string) {
+    const sector = await this.territoriesService.getVendorAssignedSector(vendorId);
+    return sector;
   }
 }

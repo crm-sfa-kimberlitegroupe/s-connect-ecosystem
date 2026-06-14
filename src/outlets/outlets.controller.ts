@@ -1,169 +1,110 @@
-import {
-  Controller,
-  Get,
-  Post,
-  Body,
-  Patch,
-  Param,
-  Delete,
-  Query,
-  UseGuards,
-  Request,
-  ForbiddenException,
-} from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Patch, Body, Param, UseGuards, Query } from '@nestjs/common';
+import { AuthGuard } from '@nestjs/passport';
+import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { OutletsService } from './outlets.service';
-import { CreateOutletDto } from './dto/create-outlet.dto';
-import { UpdateOutletDto } from './dto/update-outlet.dto';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { RolesGuard } from '../auth/guards/roles.guard';
-import { Roles } from '../auth/decorators/roles.decorator';
-import { OutletStatusEnum } from '@prisma/client';
 
-interface RequestWithUser {
-  user?: {
-    userId?: string;
-    role?: string;
-    territoryId?: string;
-  };
-}
-
+@ApiTags('Outlets')
 @Controller('outlets')
-@UseGuards(JwtAuthGuard, RolesGuard)
 export class OutletsController {
-  constructor(private readonly outletsService: OutletsService) {}
-
-  @Post()
-  create(
-    @Body() createOutletDto: CreateOutletDto,
-    @Request() req: RequestWithUser,
-  ) {
-    const userId = req.user?.userId;
-    return this.outletsService.create(createOutletDto, userId);
-  }
+  constructor(private outletsService: OutletsService) {}
 
   @Get()
+  @UseGuards(AuthGuard('jwt'))
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get all outlets' })
   async findAll(
-    @Query('status') status?: OutletStatusEnum,
+    @Query('status') status?: string,
     @Query('territoryId') territoryId?: string,
     @Query('channel') channel?: string,
     @Query('proposedBy') proposedBy?: string,
-    @Request() req?: RequestWithUser,
   ) {
-    const userRole = req?.user?.role;
-    const userTerritoryId = req?.user?.territoryId;
-
-    // FILTRAGE PAR TERRITOIRE selon le rôle
-    // ADMIN/SUP : Voient SEULEMENT les PDV de LEUR territoire
-    let finalTerritoryId = territoryId;
-
-    if (userRole === 'ADMIN' || userRole === 'SUP') {
-      if (userTerritoryId) {
-        finalTerritoryId = userTerritoryId;
-      }
-    }
-
-    return this.outletsService.findAll({
+    const outlets = await this.outletsService.findAll({
       status,
-      territoryId: finalTerritoryId,
+      territoryId,
       channel,
       proposedBy,
     });
+    return outlets;
+  }
+
+  @Get('my-territory')
+  @UseGuards(AuthGuard('jwt'))
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get outlets from my territory' })
+  async getMyTerritoryOutlets(
+    @Query('status') status?: string,
+    @Query('channel') channel?: string,
+  ) {
+    const outlets = await this.outletsService.getMyTerritoryOutlets({ status, channel });
+    return outlets;
   }
 
   @Get('stats')
-  getStats(
+  @UseGuards(AuthGuard('jwt'))
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get outlets statistics' })
+  async getStats(
     @Query('territoryId') territoryId?: string,
     @Query('proposedBy') proposedBy?: string,
   ) {
-    return this.outletsService.getStats({ territoryId, proposedBy });
-  }
-
-  /**
-   * NOUVEL ENDPOINT DÉDIÉ : Récupérer les PDV de MON territoire
-   * Route: GET /outlets/my-territory?status=APPROVED
-   */
-  @Get('my-territory')
-  @Roles('ADMIN', 'SUP')
-  async getMyTerritoryOutlets(
-    @Query('status') status?: OutletStatusEnum,
-    @Query('channel') channel?: string,
-    @Request() req?: RequestWithUser,
-  ) {
-    const userTerritoryId = req?.user?.territoryId;
-
-    if (!userTerritoryId) {
-      console.error('Pas de territoryId dans le JWT');
-      throw new ForbiddenException(
-        'Aucun territoire assigné à cet utilisateur',
-      );
-    }
-
-    // Forcer le territoryId de l'utilisateur connecté
-    const filters = {
-      status,
-      territoryId: userTerritoryId, // ← FORCÉ
-      channel,
-    };
-
-    const result = await this.outletsService.findAll(filters);
-    return result;
+    const stats = await this.outletsService.getStats({ territoryId, proposedBy });
+    return stats;
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.outletsService.findOne(id);
+  @UseGuards(AuthGuard('jwt'))
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get outlet by ID' })
+  async findById(@Param('id') id: string) {
+    const outlet = await this.outletsService.findById(id);
+    return outlet;
   }
 
-  @Patch(':id')
-  update(@Param('id') id: string, @Body() updateOutletDto: UpdateOutletDto) {
-    return this.outletsService.update(id, updateOutletDto);
+  @Post()
+  @UseGuards(AuthGuard('jwt'))
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Create new outlet' })
+  async create(@Body() data: any) {
+    const outlet = await this.outletsService.create(data);
+    return outlet;
+  }
+
+  @Put(':id')
+  @UseGuards(AuthGuard('jwt'))
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Update outlet' })
+  async update(@Param('id') id: string, @Body() data: any) {
+    const outlet = await this.outletsService.update(id, data);
+    return outlet;
   }
 
   @Patch(':id/approve')
-  @Roles('ADMIN', 'SUP')
-  async approve(@Param('id') id: string, @Request() req: RequestWithUser) {
-    const validatorId = req.user?.userId;
-    const userTerritoryId = req.user?.territoryId;
-
-    // VÉRIFICATION : L'ADMIN peut valider SEULEMENT les PDV de SON territoire
-    if (userTerritoryId) {
-      const outlet = await this.outletsService.findOne(id);
-      if (outlet.territoryId !== userTerritoryId) {
-        throw new ForbiddenException(
-          'Vous ne pouvez valider que les PDV de votre territoire',
-        );
-      }
-    }
-
-    return this.outletsService.approve(id, validatorId);
+  @UseGuards(AuthGuard('jwt'))
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Approve outlet' })
+  async approve(@Param('id') id: string) {
+    const outlet = await this.outletsService.approve(id);
+    return outlet;
   }
 
   @Patch(':id/reject')
-  @Roles('ADMIN', 'SUP')
-  async reject(
-    @Param('id') id: string,
-    @Body('reason') reason?: string,
-    @Request() req?: RequestWithUser,
-  ) {
-    const validatorId = req?.user?.userId;
-    const userTerritoryId = req?.user?.territoryId;
-
-    // VÉRIFICATION : L'ADMIN peut rejeter SEULEMENT les PDV de SON territoire
-    if (userTerritoryId) {
-      const outlet = await this.outletsService.findOne(id);
-      if (outlet.territoryId !== userTerritoryId) {
-        throw new ForbiddenException(
-          'Vous ne pouvez rejeter que les PDV de votre territoire',
-        );
-      }
-    }
-
-    return this.outletsService.reject(id, reason, validatorId);
+  @UseGuards(AuthGuard('jwt'))
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Reject outlet' })
+  async reject(@Param('id') id: string, @Body('reason') reason?: string) {
+    const outlet = await this.outletsService.reject(id, reason);
+    return outlet;
   }
 
   @Delete(':id')
-  @Roles('ADMIN')
-  remove(@Param('id') id: string) {
-    return this.outletsService.remove(id);
+  @UseGuards(AuthGuard('jwt'))
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Delete outlet' })
+  async delete(@Param('id') id: string) {
+    await this.outletsService.delete(id);
+    return {
+      success: true,
+      message: 'Outlet deleted successfully',
+    };
   }
 }
