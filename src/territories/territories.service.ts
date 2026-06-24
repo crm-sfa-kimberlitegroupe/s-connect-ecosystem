@@ -1,12 +1,13 @@
 import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { UserRole } from '@prisma/client'; // 🎯 Import officiel de l'enum Prisma
 
 @Injectable()
 export class TerritoriesService {
   constructor(private prisma: PrismaService) {}
 
   async findAll(tenantId: string, filters?: { level?: string; parentId?: string }) {
-    const where: any = { tenantId }; // 🎯 Isolation Multi-Tenant
+    const where: any = { tenantId };
     
     if (filters?.level) {
       where.level = filters.level;
@@ -45,7 +46,7 @@ export class TerritoriesService {
 
   async findById(id: string, tenantId: string) {
     const territory = await this.prisma.territory.findFirst({
-      where: { id, tenantId }, // 🎯 Vérification stricte
+      where: { id, tenantId },
       include: {
         parent: true,
         children: true,
@@ -65,7 +66,6 @@ export class TerritoriesService {
   }
 
   async create(data: any, tenantId: string) {
-    // Le code doit être unique au sein du même tenant
     const existing = await this.prisma.territory.findFirst({
       where: { code: data.code, tenantId },
     });
@@ -77,7 +77,7 @@ export class TerritoriesService {
     return this.prisma.territory.create({
       data: {
         ...data,
-        tenantId, // 🎯 Ancre multi-tenant forcée
+        tenantId,
       },
       include: {
         parent: true,
@@ -211,7 +211,8 @@ export class TerritoriesService {
     return this.prisma.user.findMany({
       where: {
         tenantId,
-        role: { in: ['MANAGER', 'ADMIN'] },
+        // 🎯 Corrigé : Filtre adapté aux nouveaux niveaux d'accès 1 et 2
+        role: { in: [UserRole.COMPANY_ADMIN, UserRole.COMPANY_SUPERVISOR] },
         isActive: true,
       },
       select: {
@@ -229,7 +230,7 @@ export class TerritoriesService {
   async getAvailableAdmins(tenantId: string, excludeTerritoryId?: string) {
     const where: any = {
       tenantId,
-      role: 'ADMIN',
+      role: UserRole.COMPANY_ADMIN, // 🎯 Corrigé
       isActive: true,
     };
 
@@ -253,7 +254,7 @@ export class TerritoriesService {
     await this.findById(territoryId, tenantId);
     
     const admin = await this.prisma.user.findFirst({
-      where: { id: adminId, tenantId, role: 'ADMIN' },
+      where: { id: adminId, tenantId, role: UserRole.COMPANY_ADMIN }, // 🎯 Corrigé
     });
 
     if (!admin) {
@@ -297,7 +298,7 @@ export class TerritoriesService {
     const vendors = await this.prisma.user.findMany({
       where: {
         tenantId,
-        role: 'REP',
+        role: UserRole.VAN_SELLER, // 🎯 Corrigé : Repère les vendeurs de niveau 5
         isActive: true,
       },
       include: {
@@ -328,7 +329,6 @@ export class TerritoriesService {
   async getTerritoryGeoInfo(territoryId: string, tenantId: string) {
     const territory = await this.findById(territoryId, tenantId);
 
-    // Extraction sécurisée si ce sont des chaînes stockées sous format JSON ou texte
     const parseGeoField = (field: string | null) => {
       if (!field) return [];
       try {

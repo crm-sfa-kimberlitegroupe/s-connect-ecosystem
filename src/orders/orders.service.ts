@@ -1,5 +1,6 @@
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { UserRole } from '@prisma/client'; // 🎯 Importation de l'énumération officielle à 6 niveaux
 
 @Injectable()
 export class OrdersService {
@@ -31,7 +32,7 @@ export class OrdersService {
           password: adminData.password, 
           firstName: adminData.firstName,
           lastName: adminData.lastName,
-          role: 'ADMIN', 
+          role: UserRole.COMPANY_ADMIN, // 🎯 Corrigé : Niveau 1 - Droits d'administration totaux pour la filiale cliente
           phone: adminData.phone,
           matricule: managerMatricule,
           photoUrl: tenantData.logoUrl || null, 
@@ -70,7 +71,7 @@ export class OrdersService {
     const assignedRep = await this.prisma.user.findFirst({
       where: {
         tenantId,
-        role: 'REP',
+        role: UserRole.VAN_SELLER, // 🎯 Corrigé : Recherche du Vendeur Van de Niveau 5 assigné au territoire
         territoryId: outlet.territoryId,
         isActive: true
       }
@@ -94,7 +95,7 @@ export class OrdersService {
 
           if (!vendorStock || vendorStock.quantity < item.quantity) {
             throw new BadRequestException(
-              `Stock insuffisant dans le van pour [${sku.name}]. Demandé: ${item.quantity}, Dispo: ${vendorStock?.quantity || 0}`
+              `Stock insuffisante dans le van pour [${sku.name}]. Demandé: ${item.quantity}, Dispo: ${vendorStock?.quantity || 0}`
             );
           }
 

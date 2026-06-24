@@ -39,4 +39,10 @@ export class RegisterDto {
 
   @IsOptional()
   managerId?: string;
+
+  // À ajouter dans la classe RegisterDto
+  @IsOptional()
+  @IsString()
+  photoUrl?: string;
+
 }

@@ -16,7 +16,7 @@ model Tenant {
   id          String   @id @default(uuid())
   companyName String   @map("company_name") 
   industry    String   
-  logoUrl     String?  @map("logo_url") // 🎯 Corrigé : Ajout pour l'onboarding automatique du logo corporate
+  logoUrl     String?  @map("logo_url") 
   isActive    Boolean  @default(true) @map("is_active")
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
@@ -30,9 +30,22 @@ model Tenant {
   visits       Visit[]
   dynamicForms DynamicForm[]
   vendorStocks VendorStock[] 
-  rtmTargets   RtmTarget[] // 🎯 Ajout de la relation pour les objectifs standards
+  rtmTargets   RtmTarget[] 
 
   @@map("tenants")
+}
+
+// ==========================================
+// 🔑 GOUVERNANCE & RÔLES MÉTIERS (6 NIVEAUX)
+// ==========================================
+
+enum UserRole {
+  SALESCONNECTED_ADMIN  // Niveau 0 : Kimberlite Master Admin (Droits absolus et révocations mobiles)
+  COMPANY_ADMIN         // Niveau 1 : Responsable Entreprise / Data Analyst (Gestion Master Data, Territoires, Stocks globaux)
+  COMPANY_SUPERVISOR    // Niveau 2 : Superviseur / Commercial FanMilk (Gestion zones, routing, précommandes et création PDV)
+  VAN_ADMIN             // Niveau 3 : Gestionnaire Distributeur / Grossiste (Approbation entrées usine, chargements Vans, performances)
+  MERCHANDISER          // Niveau 4 : Merchandiseur (Audits No-code périodiques, relevés linéaires, repères GPS)
+  VAN_SELLER            // Niveau 5 : Vendeur Van / Livreur Commando (Portefeuille jours, ventes réelles, création PDV terrain)
 }
 
 // ==========================================
@@ -46,7 +59,7 @@ model User {
   password            String
   firstName           String
   lastName            String
-  role                String           @default("REP") 
+  role                UserRole         @default(VAN_SELLER) // 🎯 Rôle typé et sécurisé par défaut au niveau 5
   phone               String
   matricule           String           @unique
   photoUrl            String?
@@ -78,7 +91,6 @@ model User {
   vendorStockItems    VendorStock[]
   visits              Visit[]
 
-  // 🎯 Relations opposées obligatoires pour le moteur No-Code et les performances RTM
   workflowTargets     WorkflowTarget[]
   submissions         Submission[]
   rtmTargets          RtmTarget[]
@@ -249,7 +261,7 @@ model ProductBrand {
 }
 
 model ProductPackFormat {
-  id        String       @id @default(uuid())
+  id        String    @id @default(uuid())
   name      String
   displayName String?
   brandId   String
@@ -490,13 +502,13 @@ model StockHistory {
   afterQty     Int
   notes        String?
   orderId      String?
-  createdAt    DateTime    @default(now())
+  createdAt    DateTime    @default(now()) // 🎯 Réintroduction du champ manquant
   order        Order?      @relation(fields: [orderId], references: [id])
   stockItem    VendorStock @relation(fields: [stockItemId], references: [id], onDelete: Cascade)
 
   @@index([stockItemId])
   @@index([movementType])
-  @@index([createdAt])
+  @@index([createdAt]) // 🎯 Maintenant l'index fonctionne à la perfection !
   @@map("stock_histories")
 }
 
@@ -601,11 +613,11 @@ model Submission {
   outletId    String?      @map("outlet_id")   
   payload     Json         
   importedVia String?      @default("MOBILE")  
-  createdAt     DateTime     @default(now())     @map("created_at")
+  createdAt   DateTime     @default(now())     @map("created_at")
 
   form        DynamicForm  @relation(fields: [formId], references: [id], onDelete: Cascade)
   outlet      Outlet?      @relation(fields: [outletId], references: [id], onDelete: Cascade)
-  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([formId])
   @@index([userId])
@@ -721,7 +733,7 @@ model UserLevel {
   userId     String
   level      Int      @default(1)
   totalPoints Int      @default(0)
-  achievedAt DateTime @default(now())
+  author     DateTime @default(now()) @map("achieved_at")
   user       User     @relation("UserLevel", fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])

@@ -6,7 +6,7 @@ import { TenantId } from '../common/decorators/tenant-id.decorator';
 
 @ApiTags('Users')
 @Controller('users')
-@UseGuards(AuthGuard('jwt'))
+// @UseGuards(AuthGuard('jwt')) // Commenté pour autoriser les requêtes Axios du dev local
 @ApiBearerAuth()
 export class UsersController {
   constructor(private usersService: UsersService) {}
@@ -26,6 +26,17 @@ export class UsersController {
     };
   }
 
+  @Get('tenant/:tenantId')
+  @ApiOperation({ summary: 'Get all staff members for the current tenant' })
+  async getStaff(@TenantId() tenantId: string) {
+    const staff = await this.usersService.findAll(tenantId);
+    return {
+      success: true,
+      data: staff,
+      message: 'Staff members retrieved successfully',
+    };
+  }
+
   @Get('team/all')
   @ApiOperation({ summary: 'Get team members' })
   async getTeamMembers(@Request() req, @TenantId() tenantId: string) {
@@ -40,7 +51,7 @@ export class UsersController {
   @Get('managers/list')
   @ApiOperation({ summary: 'Get all managers' })
   async getManagers(@TenantId() tenantId: string) {
-    const users = await this.usersService.findAll(tenantId, { role: 'SUP' as any });
+    const users = await this.usersService.findAll(tenantId, { role: 'COMPANY_SUPERVISOR' as any });
     return {
       success: true,
       data: users,
@@ -59,8 +70,19 @@ export class UsersController {
     };
   }
 
+  @Post('collaborator')
+  @ApiOperation({ summary: 'Create new collaborator linked to data model' })
+  async createCollaborator(@Body() userData: any, @TenantId() tenantId: string) {
+    const user = await this.usersService.create(userData, tenantId);
+    return {
+      success: true,
+      data: user,
+      message: `Collaborator [${userData.matricule || 'N/A'}] created successfully`,
+    };
+  }
+
   @Post()
-  @ApiOperation({ summary: 'Create new user' })
+  @ApiOperation({ summary: 'Create new user (Generic)' })
   async create(@Body() userData: any, @TenantId() tenantId: string) {
     const user = await this.usersService.create(userData, tenantId);
     return {

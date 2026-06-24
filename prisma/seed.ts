@@ -1,5 +1,6 @@
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, UserRole } from '@prisma/client'; // 🎯 Corrigé : Importation de PrismaClient
 import * as bcrypt from 'bcryptjs';
+import * as dotenv from 'dotenv'; // 🎯 Étape 1 : Importer dotenv
 
 const prisma = new PrismaClient();
 
@@ -42,14 +43,14 @@ async function main() {
       password: hashedPassword,
       firstName: 'Ange Emmanuel',
       lastName: 'Offo',
-      role: 'MANAGER',
+      role: UserRole.COMPANY_ADMIN,
       phone: '+2250707070707',
       matricule: 'FM-2026-MGR',
       status: 'ACTIVE',
     },
   });
 
-  // Compte Commercial Terrain (REP) rattaché au manager
+  // Compte Commercial Terrain rattaché au manager
   const rep = await prisma.user.create({
     data: {
       tenantId: tenant.id,
@@ -57,7 +58,7 @@ async function main() {
       password: hashedPassword,
       firstName: 'Jean',
       lastName: 'Koffi',
-      role: 'REP',
+      role: UserRole.VAN_SELLER,
       phone: '+2250505050505',
       matricule: 'FM-2026-REP',
       status: 'ACTIVE',

@@ -13,9 +13,12 @@ export async function createApp() {
   const allowedOrigins = process.env.FRONTEND_URL
     ? process.env.FRONTEND_URL.split(',').map((origin) => origin.trim())
     : [
+        'http://localhost:3000', // Port Next.js standard par défaut
         'http://localhost:5173', 
         'http://localhost:5174', 
-        'https://salesconnected-frontend.vercel.app' // Ajout de ton Frontend de production
+        'http://172.21.16.1:3000', // 🎯 INDISPENSABLE : Autorise ton IP réseau Frontend
+        'http://172.21.16.1:3001', // Autorise ton IP réseau Backend
+        'https://salesconnected-frontend.vercel.app' 
       ];
 
   app.enableCors({
@@ -50,10 +53,11 @@ export async function createApp() {
 
 async function bootstrap() {
   const app = await createApp();
-  const port = process.env.PORT || 3000;
+  // Note : D'après tes logs précédents, ton port est configuré sur 3001 (NestJS) pour ne pas boxer avec Next.js (3000)
+  const port = process.env.PORT || 3001; 
   await app.listen(port, '0.0.0.0'); // Écouter sur toutes les interfaces pour accès mobile
-  console.log(`🚀 Application is running on: http://localhost:${port}`);
-  console.log(`📚 Swagger docs: http://localhost:${port}/api/docs`);
+  console.log(`🚀 Application is running on: http://172.21.16.1:${port}`);
+  console.log(`📚 Swagger docs: http://172.21.16.1:${port}/api/docs`);
 }
 
 if (require.main === module) {

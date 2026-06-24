@@ -1,6 +1,7 @@
 import { Injectable, UnauthorizedException, BadRequestException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
+import { UserRole } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 import * as speakeasy from 'speakeasy';
 import * as QRCode from 'qrcode';
@@ -17,13 +18,11 @@ export class AuthService {
     private prisma: PrismaService,
   ) {}
 
-  // 🛡️ La validation exige désormais STRICTEMENT le tenantId du header
   async validateUser(email: string, password: string, tenantId: string): Promise<any> {
-    // Recherche de l'utilisateur uniquement AU SEIN de son entreprise cliente
     const user = await this.prisma.user.findFirst({
       where: {
         email: email,
-        tenantId: tenantId, // Étanche aux collisions d'emails inter-entreprises
+        tenantId: tenantId,
       },
     });
 
@@ -41,7 +40,6 @@ export class AuthService {
       throw new UnauthorizedException('Identifiants incorrects pour cette organisation.');
     }
 
-    // Check 2FA if enabled
     if (user.twoFactorEnabled) {
       if (!loginDto.twoFactorCode) {
         return {
@@ -56,7 +54,6 @@ export class AuthService {
       }
     }
 
-    // Update last login
     await this.prisma.user.update({
       where: { id: user.id },
       data: { lastLogin: new Date() },
@@ -74,7 +71,6 @@ export class AuthService {
   }
 
   async register(registerDto: RegisterDto, tenantId: string) {
-    // Vérification de l'existence au sein du même Tenant
     const existingUser = await this.prisma.user.findFirst({
       where: { email: registerDto.email, tenantId },
     });
@@ -89,15 +85,19 @@ export class AuthService {
       throw new BadRequestException('Matricule already exists in this organization');
     }
 
-    // Hash password
     const hashedPassword = await bcrypt.hash(registerDto.password, 10);
 
-    // Create user lié magiquement à son Tenant
     const user = await this.prisma.user.create({
       data: {
-        ...registerDto,
-        tenantId, // 🏢 Liaison clé étrangère obligatoire
+        tenantId,
+        email: registerDto.email,
         password: hashedPassword,
+        firstName: registerDto.firstName,
+        lastName: registerDto.lastName,
+        phone: registerDto.phone,
+        matricule: registerDto.matricule,
+        role: (registerDto.role as unknown as UserRole) || UserRole.VAN_SELLER,
+        photoUrl: (registerDto as any).photoUrl || null,
         hireDate: registerDto.hireDate ? new Date(registerDto.hireDate) : null,
       },
     });
@@ -114,11 +114,11 @@ export class AuthService {
   }
 
   async generateTokens(user: any) {
-    const payload = {
-      sub: user.id,
-      email: user.email,
-      role: user.role,
-      tenantId: user.tenantId, // 🔑 On injecte le tenantId dans le JWT pour sécuriser Passport !
+    const payload = { 
+      sub: user.id, 
+      email: user.email, 
+      tenantId: user.tenantId, 
+      role: user.role 
     };
 
     const access_token = this.jwtService.sign(payload);
@@ -128,12 +128,13 @@ export class AuthService {
       expiresIn: this.configService.get<string>('JWT_REFRESH_EXPIRATION') ?? '30d',
     });
 
-    // Save refresh token
+    await this.prisma.refreshToken.deleteMany({ where: { userId: user.id } });
+
     await this.prisma.refreshToken.create({
       data: {
         token: refresh_token,
         userId: user.id,
-        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days
+        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
       },
     });
 
@@ -182,7 +183,6 @@ export class AuthService {
         token: refreshToken,
       },
     });
-
     return { success: true, message: 'Logout successful' };
   }
 
@@ -190,7 +190,6 @@ export class AuthService {
     await this.prisma.refreshToken.deleteMany({
       where: { userId },
     });
-
     return { success: true, message: 'Logged out from all devices' };
   }
 

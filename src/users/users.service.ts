@@ -1,16 +1,16 @@
 import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { UserRole } from '../common/types/prisma-types';
+import { UserRole } from '@prisma/client'; // 🎯 Corrigé : Importation du type ENUM officiel de Prisma
 import * as bcrypt from 'bcryptjs';
 
 @Injectable()
 export class UsersService {
   constructor(private prisma: PrismaService) {}
 
-async findById(id: string, tenantId?: string) {
+  async findById(id: string, tenantId?: string) {
     const where: any = { id };
     
-    // 🎯 Si le tenantId est fourni, on applique la barrière multi-tenant strict
+    // 🎯 Barrière multi-tenant stricte
     if (tenantId) {
       where.tenantId = tenantId;
     }
@@ -41,7 +41,7 @@ async findById(id: string, tenantId?: string) {
   }
 
   async findAll(tenantId: string, filters?: { role?: UserRole; territoryId?: string; managerId?: string }) {
-    const where: any = { tenantId }; // 🎯 Isolation global obligatoire
+    const where: any = { tenantId }; // 🎯 Isolation globale obligatoire
     
     if (filters?.role) {
       where.role = filters.role;
@@ -67,9 +67,10 @@ async findById(id: string, tenantId?: string) {
   async getTeamMembers(managerId: string, tenantId: string) {
     return this.prisma.user.findMany({
       where: {
-        tenantId, // 🎯
+        tenantId,
         managerId,
-        role: { in: [UserRole.REP, UserRole.ADMIN] },
+        // 🎯 Corrigé : Filtre adapté aux rôles terrain de la nouvelle structure (Superviseurs, Merchs et Vendeurs)
+        role: { in: [UserRole.COMPANY_SUPERVISOR, UserRole.MERCHANDISER, UserRole.VAN_SELLER] },
       },
     });
   }
@@ -101,13 +102,13 @@ async findById(id: string, tenantId?: string) {
   }
 
   async update(id: string, data: any, tenantId: string) {
-    await this.findById(id, tenantId); // Garantit l'appartenance
+    await this.findById(id, tenantId); // Garantit l'appartenance au Tenant
 
     if (data.password) {
       data.password = await bcrypt.hash(data.password, 10);
     }
 
-    delete data.tenantId; // Protection anti-fuite
+    delete data.tenantId; // Protection contre la fuite ou le changement de structure
 
     return this.prisma.user.update({
       where: { id },
@@ -139,7 +140,7 @@ async findById(id: string, tenantId?: string) {
 
   async getPerformance(id: string, tenantId: string) {
     await this.findById(id, tenantId);
-    // TODO: Connecter aux vrais calculs Orders/Visits filtrés par tenantId
+    // TODO: Connecter aux calculs réels des tables Orders/Visits de Supabase
     return {
       coverage: 85,
       strikeRate: 75,
