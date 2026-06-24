@@ -22,6 +22,36 @@ const router = createRouter({
           component: () => import('@/pages/dashboard/DashboardPage.vue'),
         },
         {
+          path: 'notifications',
+          name: 'notifications',
+          component: () => import('@/pages/notifications/NotificationsPage.vue'),
+        },
+        {
+          path: 'campaigns',
+          name: 'campaigns',
+          component: () => import('@/pages/campaigns/CampaignsPage.vue'),
+        },
+        {
+          path: 'agenda',
+          name: 'agenda',
+          component: () => import('@/pages/agenda/AgendaPage.vue'),
+        },
+        {
+          path: 'content',
+          name: 'content',
+          component: () => import('@/pages/content/ContentPage.vue'),
+        },
+        {
+          path: 'statistics',
+          name: 'statistics',
+          component: () => import('@/pages/statistics/StatisticsPage.vue'),
+        },
+        {
+          path: 'messages',
+          name: 'messages',
+          component: () => import('@/pages/messages/MessagesPage.vue'),
+        },
+        {
           path: 'users',
           name: 'users',
           component: () => import('@/pages/users/UsersPage.vue'),
@@ -45,6 +75,11 @@ const router = createRouter({
           path: 'routes',
           name: 'routes',
           component: () => import('@/pages/routes/RoutesPage.vue'),
+        },
+        {
+          path: 'settings',
+          name: 'settings',
+          component: () => import('@/pages/settings/SettingsPage.vue'),
         },
       ],
     },
