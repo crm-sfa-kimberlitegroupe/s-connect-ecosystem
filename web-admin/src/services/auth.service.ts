@@ -8,12 +8,16 @@ export const authService = {
   },
 
   async getProfile(): Promise<User> {
-    const { data } = await api.get<User>('/auth/profile')
+    const { data } = await api.get<{ success: boolean; user: User }>('/auth/profile')
+    return data.user
+  },
+
+  async refreshToken(refreshToken: string): Promise<{ access_token: string; refresh_token: string }> {
+    const { data } = await api.post('/auth/refresh', { refreshToken })
     return data
   },
 
-  async refreshToken(refreshToken: string): Promise<{ access_token: string }> {
-    const { data } = await api.post('/auth/refresh', { refresh_token: refreshToken })
-    return data
+  async logout(refreshToken: string): Promise<void> {
+    await api.post('/auth/logout', { refreshToken })
   },
 }

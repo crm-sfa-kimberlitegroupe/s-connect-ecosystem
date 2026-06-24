@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { API_URL } from '../constants/theme'
+import { API_URL, TENANT_ID } from '../constants/theme'
 
 class ApiClient {
   private baseUrl: string
@@ -10,11 +10,15 @@ class ApiClient {
 
   private async getHeaders(): Promise<Record<string, string>> {
     const token = await AsyncStorage.getItem('token')
+    const tenantId = TENANT_ID || (await AsyncStorage.getItem('tenantId')) || ''
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
     }
     if (token) {
       headers['Authorization'] = `Bearer ${token}`
+    }
+    if (tenantId) {
+      headers['X-Tenant-ID'] = tenantId
     }
     return headers
   }

@@ -7,15 +7,20 @@ export const useAuthStore = defineStore('auth', () => {
   const user = ref<User | null>(null)
   const token = ref<string | null>(localStorage.getItem('token'))
   const refreshToken = ref<string | null>(localStorage.getItem('refreshToken'))
+  const tenantId = ref<string | null>(localStorage.getItem('tenantId'))
   const loading = ref(false)
 
   const isAuthenticated = computed(() => !!token.value && !!user.value)
-  const isAdmin = computed(() => user.value?.role === 'ADMIN' || user.value?.role === 'SUP')
+  const isAdmin = computed(() => user.value?.role === 'COMPANY_ADMIN' || user.value?.role === 'ADMIN' || user.value?.role === 'SUP')
   const isSup = computed(() => user.value?.role === 'SUP')
 
-  async function login(email: string, password: string) {
+  async function login(email: string, password: string, selectedTenantId?: string) {
     loading.value = true
     try {
+      if (selectedTenantId) {
+        tenantId.value = selectedTenantId
+        localStorage.setItem('tenantId', selectedTenantId)
+      }
       const response = await authService.login(email, password)
       token.value = response.access_token
       refreshToken.value = response.refresh_token
@@ -47,5 +52,5 @@ export const useAuthStore = defineStore('auth', () => {
     localStorage.removeItem('refreshToken')
   }
 
-  return { user, token, refreshToken, loading, isAuthenticated, isAdmin, isSup, login, fetchProfile, logout }
+  return { user, token, refreshToken, tenantId, loading, isAuthenticated, isAdmin, isSup, login, fetchProfile, logout }
 })

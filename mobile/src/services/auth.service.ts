@@ -18,7 +18,8 @@ export const authService = {
   },
 
   async getProfile(): Promise<User> {
-    return api.get<User>('/auth/profile')
+    const data = await api.get<{ success: boolean; user: User }>('/auth/profile')
+    return data.user
   },
 
   async logout(): Promise<void> {

@@ -1,20 +1,51 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import api from '@/services/api'
 
 const router = useRouter()
 const authStore = useAuthStore()
 
 const email = ref('')
 const password = ref('')
+const tenantId = ref(localStorage.getItem('tenantId') || '')
 const error = ref('')
 const showPassword = ref(false)
 
+interface Tenant {
+  id: string
+  companyName: string
+  industry: string
+}
+
+const tenants = ref<Tenant[]>([])
+const tenantsLoading = ref(false)
+
+onMounted(async () => {
+  tenantsLoading.value = true
+  try {
+    const { data } = await api.get<{ success: boolean; tenants: Tenant[] }>('/tenants/public/list')
+    tenants.value = data.tenants
+    if (!tenantId.value && data.tenants.length === 1) {
+      tenantId.value = data.tenants[0].id
+    }
+  } catch {
+    // Fallback: allow manual tenant ID input
+  } finally {
+    tenantsLoading.value = false
+  }
+})
+
 async function handleLogin() {
   error.value = ''
+  if (!tenantId.value) {
+    error.value = 'Veuillez sélectionner votre organisation'
+    return
+  }
   try {
-    await authStore.login(email.value, password.value)
+    localStorage.setItem('tenantId', tenantId.value)
+    await authStore.login(email.value, password.value, tenantId.value)
     router.push('/dashboard')
   } catch (e: any) {
     error.value = e.response?.data?.message || 'Identifiants incorrects'
@@ -31,7 +62,7 @@ async function handleLogin() {
           S
         </div>
         <h1 class="mt-4 text-2xl font-bold text-gray-900">SalesConnect</h1>
-        <p class="mt-1 text-sm text-gray-500">Administration • Gestion commerciale</p>
+        <p class="mt-1 text-sm text-gray-500">Administration &bull; Gestion commerciale</p>
       </div>
 
       <!-- Error -->
@@ -41,6 +72,30 @@ async function handleLogin() {
 
       <!-- Form -->
       <form class="space-y-5" @submit.prevent="handleLogin">
+        <!-- Organization selector -->
+        <div>
+          <label class="mb-1.5 block text-sm font-medium text-gray-700">Organisation</label>
+          <select
+            v-if="tenants.length > 0"
+            v-model="tenantId"
+            required
+            class="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm transition-colors focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+          >
+            <option value="" disabled>Sélectionner votre entreprise</option>
+            <option v-for="tenant in tenants" :key="tenant.id" :value="tenant.id">
+              {{ tenant.companyName }}
+            </option>
+          </select>
+          <input
+            v-else
+            v-model="tenantId"
+            type="text"
+            required
+            placeholder="ID Organisation (UUID)"
+            class="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm transition-colors focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+          />
+        </div>
+
         <div>
           <label class="mb-1.5 block text-sm font-medium text-gray-700">Email</label>
           <input

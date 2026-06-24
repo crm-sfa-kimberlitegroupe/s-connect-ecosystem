@@ -12,4 +12,5 @@ export const Colors = {
   border: '#E2E8F0',
 }
 
-export const API_URL = process.env.EXPO_PUBLIC_API_URL || 'https://backendsfa.onrender.com/api'
+export const API_URL = process.env.EXPO_PUBLIC_API_URL || 'https://backendsfa-gdqw.onrender.com/api'
+export const TENANT_ID = process.env.EXPO_PUBLIC_TENANT_ID || ''
