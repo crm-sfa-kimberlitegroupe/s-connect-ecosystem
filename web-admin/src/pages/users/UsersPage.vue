@@ -48,7 +48,7 @@ function getRoleBadgeClass(role: string) {
         <p class="text-sm text-gray-500">Gestion des comptes utilisateurs</p>
       </div>
       <button
-        class="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-primary-dark"
+        class="rounded-md bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-dark"
         @click="router.push('/users/create')"
       >
         + Nouvel Utilisateur
