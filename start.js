@@ -53,16 +53,16 @@ try {
   
   // Démarrer l'application
   console.log('\n🎯 Démarrage de l\'application NestJS...');
-  console.log('📍 Port:', process.env.PORT || 3000);
+  console.log('📍 Port:', process.env.PORT || 3001);
   console.log('🌍 Environnement:', process.env.NODE_ENV || 'development');
   
   // Importer et démarrer l'application NestJS
   const { createApp } = require('./dist/main.js');
   createApp().then(app => {
-    const port = process.env.PORT || 3000;
+    const port = process.env.PORT || 3001;
     return app.listen(port, '0.0.0.0');
   }).then(() => {
-    const port = process.env.PORT || 3000;
+    const port = process.env.PORT || 3001;
     console.log(`🚀 Application running on port ${port}`);
     console.log(`📚 Swagger docs: http://0.0.0.0:${port}/api/docs`);
   }).catch(err => {
