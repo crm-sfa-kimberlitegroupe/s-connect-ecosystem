@@ -40,12 +40,15 @@ try {
   // Générer le client Prisma (au cas où)
   run('npx prisma generate', 'Génération du client Prisma');
   
-  // Déployer les migrations (si nécessaire)
-  console.log('\n📊 Vérification de la base de données...');
-  const migrationResult = run('npx prisma migrate deploy', 'Application des migrations');
-  
-  if (!migrationResult) {
-    console.log('⚠️  Les migrations ont échoué, mais on continue...');
+  // Déployer les migrations (seulement si DIRECT_URL est configurée)
+  if (process.env.DIRECT_URL) {
+    console.log('\n📊 Vérification de la base de données...');
+    const migrationResult = run('npx prisma migrate deploy', 'Application des migrations');
+    if (!migrationResult) {
+      console.log('⚠️  Les migrations ont échoué, mais on continue...');
+    }
+  } else {
+    console.log('\n⚠️  DIRECT_URL non configurée — migrations ignorées');
   }
   
   // Démarrer l'application
@@ -53,8 +56,20 @@ try {
   console.log('📍 Port:', process.env.PORT || 3000);
   console.log('🌍 Environnement:', process.env.NODE_ENV || 'development');
   
-  // Utiliser require au lieu d'execSync pour un meilleur contrôle
-  require('./dist/main.js');
+  // Importer et démarrer l'application NestJS
+  const { createApp } = require('./dist/main.js');
+  createApp().then(app => {
+    const port = process.env.PORT || 3000;
+    return app.listen(port, '0.0.0.0');
+  }).then(() => {
+    const port = process.env.PORT || 3000;
+    console.log(`🚀 Application running on port ${port}`);
+    console.log(`📚 Swagger docs: http://0.0.0.0:${port}/api/docs`);
+  }).catch(err => {
+    console.error('💥 Erreur au démarrage de NestJS:', err.message);
+    console.error(err.stack);
+    process.exit(1);
+  });
   
 } catch (error) {
   console.error('\n💥 ERREUR CRITIQUE LORS DU DÉMARRAGE');
