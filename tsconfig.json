@@ -22,5 +22,5 @@
       "@/*": ["./src/*"]
     }
   },
-  "exclude": ["prisma/**", "node_modules/**", "dist/**", "modules_disabled/**", "backend-sfa/**"]
+  "exclude": ["prisma/**", "node_modules/**", "dist/**", "modules_disabled/**", "backend-sfa/**", "mobile/**", "web-admin/**"]
 }
